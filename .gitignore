@@ -24,8 +24,6 @@ yarn-error.log
 /.zed
 /.agents
 /.amp
-/.claude/*
-!/.claude/settings.json
 /.codex
 /.cursor
 /.factory
