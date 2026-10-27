@@ -70,7 +70,7 @@ Everything belongs to a household, so both users see the same data. Money is sto
 
 Each feature is one HCF plan, small enough to build, test and deploy on its own. Features 1–8 make Christmas 2026 trackable; aim to finish them by early December, then add 9–15 as time allows.
 
-- [ ] **1. Project and login** — Run laravel new with Livewire and Pest, adopt laravel-factory, run /hcf:project-setup, port the acceptance-spec workflow from YesChef, then email + password auth.
+- [x] **1. Project and login** — Run laravel new with Livewire and Pest, adopt laravel-factory, run /hcf:project-setup, port the acceptance-spec workflow from YesChef, then email + password auth.
   - Done when: factory checks pass in CI, a locked acceptance scenario blocks agent edits, and I can register, log in and log out.
 - [ ] **2. Household and partner invite** — Create a household on registration; invite my partner by email to join it.
   - Done when: both of us log in and land in the same household.
