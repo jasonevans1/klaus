@@ -7,6 +7,13 @@
 
         <form method="POST" action="{{ route('register.store') }}" class="flex flex-col gap-6">
             @csrf
+            @if ($invitation ?? null)
+                <input type="hidden" name="invitation" value="{{ request('invitation') }}">
+                <flux:text>{{ __("You're joining :household.", ['household' => $invitation->household->name]) }}</flux:text>
+            @endif
+            @if (session('error'))
+                <flux:text class="text-red-600">{{ session('error') }}</flux:text>
+            @endif
             <!-- Name -->
             <flux:input
                 name="name"
@@ -23,7 +30,8 @@
             <flux:input
                 name="email"
                 :label="__('Email address')"
-                :value="old('email')"
+                :value="($invitation ?? null)?->email ?? old('email')"
+                :readonly="(bool) ($invitation ?? null)"
                 type="email"
                 required
                 autocomplete="email"
