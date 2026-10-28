@@ -72,7 +72,7 @@ Each feature is one HCF plan, small enough to build, test and deploy on its own.
 
 - [x] **1. Project and login** — Run laravel new with Livewire and Pest, adopt laravel-factory, run /hcf:project-setup, port the acceptance-spec workflow from YesChef, then email + password auth.
   - Done when: factory checks pass in CI, a locked acceptance scenario blocks agent edits, and I can register, log in and log out.
-- [ ] **2. Household and partner invite** — Create a household on registration; invite my partner by email to join it.
+- [x] **2. Household and partner invite** — Create a household on registration; invite my partner by email to join it.
   - Done when: both of us log in and land in the same household.
 - [ ] **3. Groups and people** — Seed the four fixed groups; add, edit and archive people, including shared entries like "The Smiths".
   - Done when: I can enter everyone from last year's spreadsheet.
