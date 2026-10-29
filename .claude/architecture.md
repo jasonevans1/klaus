@@ -3,8 +3,8 @@
 Klaus is a Laravel 13 + Livewire 4 app for planning Christmas and birthday gifts, shared by one household (two users). Product plan and build order: `docs/v1-plan.md`.
 
 ## Directory Structure
-- `app/Models/` - Eloquent models (Household, User, Group, Recipient, Occasion, Gift)
-- `app/Enums/` - Backed enums (GiftStatus, OccasionType)
+- `app/Models/` - Eloquent models (Household, User, Recipient, Occasion, Gift)
+- `app/Enums/` - Backed enums (RecipientGroup, GiftStatus, OccasionType)
 - `app/Actions/` - Single-purpose classes that change data; `app/Actions/Fortify/` holds auth actions
 - `app/Repositories/` - All reads of household data (queries, lists)
 - `app/Services/` - Calculations that combine data, e.g. budget/spent/remaining totals

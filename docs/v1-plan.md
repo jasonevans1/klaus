@@ -56,8 +56,8 @@ Everything belongs to a household, so both users see the same data. Money is sto
 | --- | --- | --- |
 | households | name | One per couple |
 | users | household\_id, name, email, password | Added to Laravel's default users table |
-| groups | household\_id, name, sort\_order | Seeded with the four fixed groups |
-| recipients | household\_id, group\_id, name, is\_shared, birthday, interests, archived | `is_shared` marks entries like "The Smiths" |
+| (no groups table) | | Groups are a fixed `RecipientGroup` enum, stored as a string on `recipients.group` |
+| recipients | household\_id, group, name, is\_shared, birthday, interests, archived | `is_shared` marks entries like "The Smiths" |
 | occasions | household\_id, name, type (christmas/birthday), date, birthday\_recipient\_id | `birthday_recipient_id` prevents duplicate auto-created birthdays |
 | occasion\_recipient | occasion\_id, recipient\_id, budget\_cents | Who is on an occasion and their budget |
 | gifts | household\_id, recipient\_id, occasion\_id (nullable), title, status, price\_cents, store, url, purchased\_by\_user\_id, is\_private, created\_by\_user\_id | Null occasion = a year-round idea |
@@ -74,7 +74,7 @@ Each feature is one HCF plan, small enough to build, test and deploy on its own.
   - Done when: factory checks pass in CI, a locked acceptance scenario blocks agent edits, and I can register, log in and log out.
 - [x] **2. Household and partner invite** — Create a household on registration; invite my partner by email to join it.
   - Done when: both of us log in and land in the same household.
-- [ ] **3. Groups and people** — Seed the four fixed groups; add, edit and archive people, including shared entries like "The Smiths".
+- [ ] **3. Groups and people** — Use the fixed `RecipientGroup` enum (nothing seeded); add, edit and archive people, including shared entries like "The Smiths".
   - Done when: I can enter everyone from last year's spreadsheet.
 - [ ] **4. Occasions and budgets** — Create a Christmas occasion, add people to it, set each person's budget.
   - Done when: Christmas 2026 lists everyone with a budget.
