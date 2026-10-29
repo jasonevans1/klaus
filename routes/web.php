@@ -13,6 +13,7 @@ Route::get('invitations/{token}', function (string $token) {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::view('dashboard', 'dashboard')->name('dashboard');
+    Route::livewire('people', 'pages::people.index')->name('people.index');
 });
 
 require __DIR__.'/settings.php';

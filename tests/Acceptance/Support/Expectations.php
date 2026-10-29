@@ -48,3 +48,51 @@ expect()->extend('toHaveBeenSent', function () {
 
     return $this;
 });
+
+expect()->extend('toShowGroups', function (array $groups) {
+    expect($this->value)->toBeInstanceOf(SeenPeople::class)
+        ->and($this->value->names())->toBe($groups);
+
+    return $this;
+});
+
+expect()->extend('toShowSharedEntries', function (array $names) {
+    expect($this->value)->toBeInstanceOf(SeenPeople::class);
+
+    $shared = array_values(array_map(
+        fn (SeenPerson $p) => $p->name,
+        array_filter($this->value->everyone(), fn (SeenPerson $p) => $p->shared),
+    ));
+    sort($shared);
+    sort($names);
+
+    expect($shared)->toBe($names);
+
+    return $this;
+});
+
+expect()->extend('toShowArchived', function (array $names) {
+    expect($this->value)->toBeInstanceOf(SeenPeople::class);
+
+    $archived = array_values(array_map(
+        fn (SeenPerson $p) => $p->name,
+        array_filter($this->value->everyone(), fn (SeenPerson $p) => $p->archived),
+    ));
+    sort($archived);
+    sort($names);
+
+    expect($archived)->toBe($names);
+
+    return $this;
+});
+
+expect()->extend('toShowBirthday', function (string $name, ?string $birthday, ?int $age) {
+    expect($this->value)->toBeInstanceOf(SeenPeople::class);
+
+    $person = $this->value->person($name);
+
+    expect($person->birthday)->toBe($birthday)
+        ->and($person->age)->toBe($age);
+
+    return $this;
+});
