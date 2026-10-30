@@ -74,7 +74,7 @@ Each feature is one HCF plan, small enough to build, test and deploy on its own.
   - Done when: factory checks pass in CI, a locked acceptance scenario blocks agent edits, and I can register, log in and log out.
 - [x] **2. Household and partner invite** — Create a household on registration; invite my partner by email to join it.
   - Done when: both of us log in and land in the same household.
-- [ ] **3. Groups and people** — Use the fixed `RecipientGroup` enum (nothing seeded); add, edit and archive people, including shared entries like "The Smiths".
+- [x] **3. Groups and people** — Use the fixed `RecipientGroup` enum (nothing seeded); add, edit and archive people, including shared entries like "The Smiths".
   - Done when: I can enter everyone from last year's spreadsheet.
 - [ ] **4. Occasions and budgets** — Create a Christmas occasion, add people to it, set each person's budget.
   - Done when: Christmas 2026 lists everyone with a budget.
