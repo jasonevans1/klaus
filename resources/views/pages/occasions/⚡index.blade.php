@@ -6,6 +6,7 @@ use App\Repositories\OccasionRepository;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -61,7 +62,9 @@ new #[Title('Occasions')] class extends Component {
                 <flux:text size="sm">{{ $occasion->date->format('M j, Y') }}</flux:text>
             </div>
             <flux:button size="sm" variant="danger" wire:click="delete({{ $occasion->id }})"
-                wire:confirm="{{ __('Delete :name?', ['name' => $occasion->name]) }}" data-test="delete-occasion-button">{{ __('Delete') }}</flux:button>
+                wire:confirm="{{ $occasion->gifts_count
+                    ? __('Delete :name and its :gifts?', ['name' => $occasion->name, 'gifts' => $occasion->gifts_count.' '.Str::plural('gift', $occasion->gifts_count)])
+                    : __('Delete :name?', ['name' => $occasion->name]) }}" data-test="delete-occasion-button">{{ __('Delete') }}</flux:button>
         </div>
     @empty
         <flux:text>{{ __('No occasions yet.') }}</flux:text>

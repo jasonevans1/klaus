@@ -104,6 +104,16 @@ expect()->extend('toShowPeopleWithBudgets', function (array $groups) {
     return $this;
 });
 
+/**
+ * Every person on the occasion page with exactly these gifts under them, each [title, price, store, link], in the order shown.
+ */
+expect()->extend('toShowGifts', function (array $giftsByPerson) {
+    expect($this->value)->toBeInstanceOf(SeenOccasion::class)
+        ->and($this->value->gifts)->toBe($giftsByPerson);
+
+    return $this;
+});
+
 expect()->extend('toShowTotalBudget', function (string $total) {
     expect($this->value)->toBeInstanceOf(SeenOccasion::class)
         ->and($this->value->totalBudget)->toBe($total);

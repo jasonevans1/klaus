@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -50,6 +51,14 @@ class Occasion extends Model
     public function household(): BelongsTo
     {
         return $this->belongsTo(Household::class);
+    }
+
+    /**
+     * @return HasMany<Gift, $this>
+     */
+    public function gifts(): HasMany
+    {
+        return $this->hasMany(Gift::class);
     }
 
     /**

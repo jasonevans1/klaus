@@ -18,7 +18,7 @@ class OccasionRepository
      */
     public function listForUser(User $user): Collection
     {
-        return Occasion::query()->where('household_id', $user->household_id)->orderByDesc('date')->get();
+        return Occasion::query()->withCount('gifts')->where('household_id', $user->household_id)->orderByDesc('date')->get();
     }
 
     public function findForUser(User $user, int $id): Occasion

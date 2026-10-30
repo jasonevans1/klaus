@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\Gift;
 use App\Models\Occasion;
 use App\Models\Recipient;
 use App\Models\User;
@@ -255,7 +256,130 @@ final class Member
         $total = $xpath->query('//*[@data-total-budget]')->item(0);
         expect($total)->not->toBeNull('The occasion page shows no total budget');
 
-        return new SeenOccasion($groups, $total->getAttribute('data-total-budget'));
+        // Each person's gifts are listed in the keyed block that holds the person's row.
+        $gifts = [];
+        foreach ($xpath->query('//*[@data-person]') as $row) {
+            $gifts[$row->getAttribute('data-person')] = [];
+            $block = $xpath->query('ancestor::*[@*[name()="wire:key"]][1]', $row)->item(0);
+
+            foreach ($block === null ? [] : $xpath->query('.//*[@data-gift]', $block) as $gift) {
+                $gifts[$row->getAttribute('data-person')][] = [
+                    $gift->getAttribute('data-gift'),
+                    $gift->getAttribute('data-price'),
+                    $gift->getAttribute('data-store'),
+                    $gift->getAttribute('data-url'),
+                ];
+            }
+        }
+
+        return new SeenOccasion($groups, $total->getAttribute('data-total-budget'), $gifts);
+    }
+
+    /**
+     * Add gifts for the person from the occasion page, typing them in one after another with
+     * "Save and add another" and pressing Save after the last one.
+     */
+    public function addsGifts(string $on, string $for, GiftEntry ...$gifts): void
+    {
+        $page = Livewire::actingAs($this->user)
+            ->test('pages::occasions.show', ['occasion' => $this->occasionId($on)])
+            ->call('addGift', $this->personId($for));
+
+        foreach ($gifts as $i => $gift) {
+            $page->set('giftForm.title', $gift->title)
+                ->set('giftForm.price', $gift->price)
+                ->set('giftForm.store', $gift->store)
+                ->set('giftForm.url', $gift->link)
+                ->call($i === array_key_last($gifts) ? 'saveGift' : 'saveGiftAndAddAnother')
+                ->assertHasNoErrors();
+        }
+
+        auth()->logout();
+    }
+
+    /**
+     * Edit the person's gift called $title on the occasion page, replacing its details with $gift.
+     */
+    public function changesGift(string $on, string $for, string $title, GiftEntry $gift): void
+    {
+        Livewire::actingAs($this->user)
+            ->test('pages::occasions.show', ['occasion' => $this->occasionId($on)])
+            ->call('editGift', $this->giftId($for, $title))
+            ->set('giftForm.title', $gift->title)
+            ->set('giftForm.price', $gift->price)
+            ->set('giftForm.store', $gift->store)
+            ->set('giftForm.url', $gift->link)
+            ->call('saveGift')
+            ->assertHasNoErrors();
+
+        auth()->logout();
+    }
+
+    /**
+     * Delete the person's gift called $title from the occasion page.
+     */
+    public function deletesGift(string $on, string $for, string $title): void
+    {
+        Livewire::actingAs($this->user)
+            ->test('pages::occasions.show', ['occasion' => $this->occasionId($on)])
+            ->call('deleteGift', $this->giftId($for, $title));
+
+        auth()->logout();
+    }
+
+    private function giftId(string $for, string $title): int
+    {
+        return Gift::where('household_id', $this->user->household_id)
+            ->where('recipient_id', $this->personId($for))
+            ->where('title', $title)
+            ->firstOrFail()->id;
+    }
+
+    /**
+     * The question I am asked before removing the person from the occasion.
+     */
+    public function warningWhenRemoving(string $name, string $from): string
+    {
+        $html = Livewire::actingAs($this->user)
+            ->test('pages::occasions.show', ['occasion' => $this->occasionId($from)])
+            ->html();
+
+        auth()->logout();
+
+        return $this->confirmation($html, '//*[@data-person="'.$name.'"]//*[@data-test="remove-person-button"]');
+    }
+
+    /**
+     * The question I am asked before deleting the occasion from the Occasions page.
+     */
+    public function warningWhenDeleting(string $occasion): string
+    {
+        $html = Livewire::actingAs($this->user)->test('pages::occasions.index')->html();
+
+        auth()->logout();
+
+        return $this->confirmation($html, '//*[@data-occasion="'.$occasion.'"]//*[@data-test="delete-occasion-button"]');
+    }
+
+    /**
+     * Delete the occasion from the Occasions page.
+     */
+    public function deletesOccasion(string $occasion): void
+    {
+        Livewire::actingAs($this->user)->test('pages::occasions.index')->call('delete', $this->occasionId($occasion));
+
+        auth()->logout();
+    }
+
+    private function confirmation(string $html, string $query): string
+    {
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+        $button = (new DOMXPath($dom))->query($query)->item(0);
+
+        expect($button)->not->toBeNull('The page has no such button to confirm');
+
+        return $button->getAttribute('wire:confirm');
     }
 
     private function occasionId(string $name): int
@@ -582,9 +706,52 @@ final class SeenOccasion
 {
     /**
      * @param  array<string, array<string, string>>  $groups
+     * @param  array<string, list<array{string, string, string, string}>>  $gifts  person name => their gifts as shown,
+     *                                                                             each [title, price, store, link], in the order shown
      */
     public function __construct(
         public readonly array $groups,
         public readonly string $totalBudget,
+        public readonly array $gifts = [],
     ) {}
+}
+
+/**
+ * A gift as I would type it in: title, price in dollars and cents (e.g. "24.99"), store and product link, all but the title optional.
+ */
+final class GiftEntry
+{
+    public string $price = '';
+
+    public string $store = '';
+
+    public string $link = '';
+
+    public function __construct(public readonly string $title) {}
+
+    public function costing(string $dollars): self
+    {
+        $this->price = $dollars;
+
+        return $this;
+    }
+
+    public function from(string $store): self
+    {
+        $this->store = $store;
+
+        return $this;
+    }
+
+    public function at(string $link): self
+    {
+        $this->link = $link;
+
+        return $this;
+    }
+}
+
+function gift(string $title): GiftEntry
+{
+    return new GiftEntry($title);
 }
