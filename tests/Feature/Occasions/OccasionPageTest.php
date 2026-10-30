@@ -110,3 +110,27 @@ it('shows an empty state when nobody is on the occasion', function () {
         ->assertSee('Nobody on this occasion yet.')
         ->assertSee('Add people');
 });
+
+// Livewire::test()->set() always reaches the server, so it can't tell `wire:model.blur`
+// (Livewire 4: browser-only, never saves) from `wire:model.live.blur` (saves on blur).
+it('sends a budget to the server when the box loses focus', function () {
+    $user = User::factory()->create();
+    $occasion = occasionFor($user);
+    $mum = personOn($occasion, 'Mum');
+
+    occasionPage($user, $occasion)
+        ->assertSeeHtml('wire:model.live.blur="budgets.'.$mum->id.'"')
+        ->assertDontSeeHtml('wire:model.blur=')
+        ->assertSeeHtml('data-flux-input-group-prefix');
+});
+
+it('shows the budget error under the box', function () {
+    $user = User::factory()->create();
+    $occasion = occasionFor($user);
+    $mum = personOn($occasion, 'Mum');
+
+    occasionPage($user, $occasion)
+        ->set("budgets.{$mum->id}", '-5')
+        ->assertHasErrors("budgets.{$mum->id}")
+        ->assertSee(__('validation.min.numeric', ['attribute' => "budgets.{$mum->id}", 'min' => 0]));
+});

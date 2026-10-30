@@ -153,7 +153,14 @@ new class extends Component
                         @endif
                     </div>
                     <div class="flex items-center gap-2">
-                        <flux:input wire:model.blur="budgets.{{ $person->id }}" prefix="$" inputmode="numeric" :aria-label="__('Budget')" />
+                        <div>
+                            <flux:input.group>
+                                <flux:input.group.prefix>$</flux:input.group.prefix>
+                                {{-- Livewire 4: .blur alone never reaches the server; .live.blur saves when the box loses focus --}}
+                                <flux:input wire:model.live.blur="budgets.{{ $person->id }}" inputmode="numeric" class="w-28" :aria-label="__('Budget for :name', ['name' => $person->name])" />
+                            </flux:input.group>
+                            <flux:error name="budgets.{{ $person->id }}" />
+                        </div>
                         <flux:button size="sm" wire:click="remove({{ $person->id }})" wire:confirm="{{ __('Remove :name from this occasion?', ['name' => $person->name]) }}" data-test="remove-person-button">{{ __('Remove') }}</flux:button>
                     </div>
                 </div>
