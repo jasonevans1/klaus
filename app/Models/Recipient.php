@@ -9,6 +9,7 @@ use Database\Factories\RecipientFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -62,6 +63,14 @@ class Recipient extends Model
     public function household(): BelongsTo
     {
         return $this->belongsTo(Household::class);
+    }
+
+    /**
+     * @return BelongsToMany<Occasion, $this>
+     */
+    public function occasions(): BelongsToMany
+    {
+        return $this->belongsToMany(Occasion::class)->withPivot('budget_cents')->withTimestamps();
     }
 
     public function birthdayLabel(): ?string

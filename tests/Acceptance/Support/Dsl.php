@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\Occasion;
 use App\Models\Recipient;
 use App\Models\User;
 use Illuminate\Notifications\AnonymousNotifiable;
@@ -109,6 +110,157 @@ final class Member
     public function peopleListIncludingArchived(): SeenPeople
     {
         return $this->readPeople(true);
+    }
+
+    /**
+     * Start a new Christmas for $year from the Occasions page and report what I was told.
+     */
+    public function startsChristmas(int $year): ChristmasAttempt
+    {
+        $page = Livewire::actingAs($this->user)
+            ->test('pages::occasions.index')
+            ->set('year', $year)
+            ->call('createChristmas');
+
+        $refusal = $page->errors()->first('year');
+
+        auth()->logout();
+
+        return new ChristmasAttempt($refusal === '' ? null : $refusal);
+    }
+
+    /**
+     * The names of my household's occasions, in the order the Occasions page lists them.
+     *
+     * @return list<string>
+     */
+    public function occasions(): array
+    {
+        $html = Livewire::actingAs($this->user)->test('pages::occasions.index')->html();
+
+        auth()->logout();
+
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+
+        $names = [];
+        foreach ((new DOMXPath($dom))->query('//*[@data-occasion]') as $row) {
+            $names[] = $row->getAttribute('data-occasion');
+        }
+
+        return $names;
+    }
+
+    /**
+     * The names of the people the "Add people" window offers for the occasion, in the order shown.
+     *
+     * @return list<string>
+     */
+    public function peopleICanAddTo(string $occasion): array
+    {
+        $html = $this->addPeoplePage($occasion)->html();
+
+        auth()->logout();
+
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+
+        $names = [];
+        foreach ((new DOMXPath($dom))->query('//*[@data-available]') as $row) {
+            $names[] = $row->getAttribute('data-available');
+        }
+
+        return $names;
+    }
+
+    /**
+     * Put the named people on the occasion by ticking them in "Add people".
+     */
+    public function addsTo(string $occasion, string ...$names): void
+    {
+        $this->addPeoplePage($occasion)
+            ->set('selected', array_map(fn (string $name) => (string) $this->personId($name), $names))
+            ->call('addSelected')
+            ->assertHasNoErrors();
+
+        auth()->logout();
+    }
+
+    /**
+     * Put everyone on the occasion with "Add all".
+     */
+    public function addsEveryoneTo(string $occasion): void
+    {
+        $this->addPeoplePage($occasion)->call('addAll')->assertHasNoErrors();
+
+        auth()->logout();
+    }
+
+    private function addPeoplePage(string $occasion): Testable
+    {
+        return Livewire::actingAs($this->user)
+            ->test('pages::occasions.show', ['occasion' => $this->occasionId($occasion)])
+            ->call('openAddPeople');
+    }
+
+    /**
+     * Type a whole-dollar budget for the person on the occasion page; null empties the field (no budget).
+     */
+    public function setsBudget(string $occasion, string $name, ?int $dollars): void
+    {
+        Livewire::actingAs($this->user)
+            ->test('pages::occasions.show', ['occasion' => $this->occasionId($occasion)])
+            ->set('budgets.'.$this->personId($name), $dollars === null ? '' : (string) $dollars)
+            ->assertHasNoErrors();
+
+        auth()->logout();
+    }
+
+    /**
+     * Remove the person from the occasion page.
+     */
+    public function removesFrom(string $occasion, string $name): void
+    {
+        Livewire::actingAs($this->user)
+            ->test('pages::occasions.show', ['occasion' => $this->occasionId($occasion)])
+            ->call('remove', $this->personId($name));
+
+        auth()->logout();
+    }
+
+    /**
+     * What the occasion page shows me: its people under their group headings with their budgets, and the total budget.
+     */
+    public function occasion(string $name): SeenOccasion
+    {
+        $html = Livewire::actingAs($this->user)
+            ->test('pages::occasions.show', ['occasion' => $this->occasionId($name)])
+            ->html();
+
+        auth()->logout();
+
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+        $xpath = new DOMXPath($dom);
+
+        $groups = [];
+        foreach ($xpath->query('//*[@data-group]') as $group) {
+            $label = $group->getAttribute('data-group');
+
+            foreach ($xpath->query('.//*[@data-person]', $group) as $row) {
+                $groups[$label][$row->getAttribute('data-person')] = $row->getAttribute('data-budget');
+            }
+        }
+
+        $total = $xpath->query('//*[@data-total-budget]')->item(0);
+        expect($total)->not->toBeNull('The occasion page shows no total budget');
+
+        return new SeenOccasion($groups, $total->getAttribute('data-total-budget'));
+    }
+
+    private function occasionId(string $name): int
+    {
+        return Occasion::where('household_id', $this->user->household_id)->where('name', $name)->firstOrFail()->id;
     }
 
     private function personId(string $name): int
@@ -412,4 +564,27 @@ function person(string $name): PersonEntry
 function itIs(string $date): void
 {
     test()->travelTo(Carbon\Carbon::parse($date));
+}
+
+/**
+ * The outcome of trying to start a Christmas: refusal is the message I was shown, or null when it was created.
+ */
+final class ChristmasAttempt
+{
+    public function __construct(public readonly ?string $refusal) {}
+}
+
+/**
+ * An occasion page as I see it: group label => [person name => budget as shown, e.g. "$1,250" or "No budget"],
+ * both in the order shown, plus the total budget as shown.
+ */
+final class SeenOccasion
+{
+    /**
+     * @param  array<string, array<string, string>>  $groups
+     */
+    public function __construct(
+        public readonly array $groups,
+        public readonly string $totalBudget,
+    ) {}
 }

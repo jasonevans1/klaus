@@ -18,6 +18,9 @@
                     <flux:sidebar.item icon="users" :href="route('people.index')" :current="request()->routeIs('people.*')" wire:navigate>
                         {{ __('People') }}
                     </flux:sidebar.item>
+                    <flux:sidebar.item icon="calendar" :href="route('occasions.index')" :current="request()->routeIs('occasions.*')" wire:navigate>
+                        {{ __('Occasions') }}
+                    </flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>
 

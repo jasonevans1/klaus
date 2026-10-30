@@ -36,7 +36,7 @@ expect()->extend('toBeTheSameHouseholdAs', function (SeenHousehold $other) {
 });
 
 expect()->extend('toBeRefusedWith', function (string $message) {
-    expect($this->value)->toBeInstanceOf(InviteAttempt::class)
+    expect($this->value instanceof InviteAttempt || $this->value instanceof ChristmasAttempt)->toBeTrue()
         ->and($this->value->refusal)->toBe($message);
 
     return $this;
@@ -93,6 +93,20 @@ expect()->extend('toShowBirthday', function (string $name, ?string $birthday, ?i
 
     expect($person->birthday)->toBe($birthday)
         ->and($person->age)->toBe($age);
+
+    return $this;
+});
+
+expect()->extend('toShowPeopleWithBudgets', function (array $groups) {
+    expect($this->value)->toBeInstanceOf(SeenOccasion::class)
+        ->and($this->value->groups)->toBe($groups);
+
+    return $this;
+});
+
+expect()->extend('toShowTotalBudget', function (string $total) {
+    expect($this->value)->toBeInstanceOf(SeenOccasion::class)
+        ->and($this->value->totalBudget)->toBe($total);
 
     return $this;
 });
