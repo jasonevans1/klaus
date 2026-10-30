@@ -76,7 +76,7 @@ Each feature is one HCF plan, small enough to build, test and deploy on its own.
   - Done when: both of us log in and land in the same household.
 - [x] **3. Groups and people** — Use the fixed `RecipientGroup` enum (nothing seeded); add, edit and archive people, including shared entries like "The Smiths".
   - Done when: I can enter everyone from last year's spreadsheet.
-- [ ] **4. Occasions and budgets** — Create a Christmas occasion, add people to it, set each person's budget.
+- [x] **4. Occasions and budgets** — Create a Christmas occasion, add people to it, set each person's budget.
   - Done when: Christmas 2026 lists everyone with a budget.
 - [ ] **5. Gifts on an occasion** — Add, edit and delete gifts per person: title, price, store, product link.
   - Done when: Pluto's eight gifts are eight separate rows.
