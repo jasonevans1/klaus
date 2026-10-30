@@ -40,6 +40,14 @@ class Household extends Model
     }
 
     /**
+     * @return HasMany<Occasion, $this>
+     */
+    public function occasions(): HasMany
+    {
+        return $this->hasMany(Occasion::class);
+    }
+
+    /**
      * @return HasMany<HouseholdInvitation, $this>
      */
     public function invitations(): HasMany

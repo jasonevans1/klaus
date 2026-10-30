@@ -21,6 +21,15 @@ class RecipientRepository
             ->unless($includeArchived, fn ($query) => $query->whereNull('archived_at'))
             ->get();
 
+        return $this->groupPeople($people);
+    }
+
+    /**
+     * @param  Collection<int, Recipient>  $people
+     * @return array<string, Collection<int, Recipient>>
+     */
+    public function groupPeople(Collection $people): array
+    {
         $grouped = [];
         foreach (RecipientGroup::cases() as $group) {
             $members = $people->where('group', $group)->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE);
