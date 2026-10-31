@@ -153,3 +153,57 @@ expect()->extend('toShowGiftStatus', function (string $person, string $gift, str
 
     return $this;
 });
+
+/**
+ * Every person on the occasion page with exactly this spent and remaining, e.g. ['Pluto' => ['$80', '$20'], 'Mum' => ['$62.50', '-$12.50']].
+ * Remaining is null for a person with no budget. Their row reads "Spent $80" and "$20 left" / "$12.50 over", or neither when there is no budget.
+ */
+expect()->extend('toShowSpending', function (array $byPerson) {
+    expect($this->value)->toBeInstanceOf(SeenOccasion::class);
+
+    $seen = array_map(
+        fn (array $row) => [$row['spent'], $row['remaining'] === '' ? null : $row['remaining']],
+        $this->value->spending,
+    );
+
+    expect($seen)->toBe($byPerson);
+
+    foreach ($byPerson as $person => [$spent, $remaining]) {
+        $text = $this->value->spending[$person]['text'];
+
+        expect($text)->toContain("Spent {$spent}");
+
+        if ($remaining === null) {
+            expect($text)->not->toContain(' left')->not->toContain(' over');
+        } elseif (str_starts_with($remaining, '-')) {
+            expect($text)->toContain(substr($remaining, 1).' over')->not->toContain(' left');
+        } else {
+            expect($text)->toContain("{$remaining} left")->not->toContain(' over');
+        }
+    }
+
+    return $this;
+});
+
+/**
+ * The occasion's header shows these season totals, e.g. budget "$180", spent "$167.50", remaining "$12.50" (or "-$12.50").
+ */
+expect()->extend('toShowSeasonTotals', function (string $budget, string $spent, string $remaining) {
+    expect($this->value)->toBeInstanceOf(SeenOccasion::class)
+        ->and($this->value->totalBudget)->toBe($budget)
+        ->and($this->value->totalSpent)->toBe($spent)
+        ->and($this->value->totalRemaining)->toBe($remaining);
+
+    return $this;
+});
+
+/**
+ * Exactly these people are listed under "No gift yet", in the order shown; with nobody, there is no "No gift yet" section at all.
+ */
+expect()->extend('toShowNoGiftYet', function (array $names) {
+    expect($this->value)->toBeInstanceOf(SeenOccasion::class)
+        ->and($this->value->noGift)->toBe($names)
+        ->and($this->value->showsNoGiftHeading)->toBe($names !== []);
+
+    return $this;
+});

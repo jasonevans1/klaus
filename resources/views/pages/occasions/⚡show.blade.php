@@ -13,6 +13,7 @@ use App\Livewire\Forms\GiftForm;
 use App\Models\Occasion;
 use App\Repositories\GiftRepository;
 use App\Repositories\OccasionRepository;
+use App\Services\BudgetSummary;
 use App\Support\Budget;
 use App\Support\Price;
 use Flux\Flux;
@@ -193,6 +194,11 @@ new class extends Component
         return app(OccasionRepository::class)->totalBudgetCents($this->occasion);
     }
 
+    public function summary(): array
+    {
+        return app(BudgetSummary::class)->summarize(collect($this->groups)->flatten(1), $this->giftsByPerson);
+    }
+
     public function removeWarning(string $name, int $giftCount): string
     {
         return $giftCount === 0
@@ -213,14 +219,26 @@ new class extends Component
 }; ?>
 
 <section class="w-full space-y-6 p-6">
+    @php($summary = $this->summary())
     <div class="flex items-center justify-between gap-4">
         <div>
             <flux:heading size="xl" level="1">{{ $this->occasion->name }}</flux:heading>
             <flux:text size="sm">{{ $this->occasion->date->format('M j, Y') }}</flux:text>
             <flux:text data-total-budget="{{ Budget::format($this->totalBudgetCents) }}">{{ __('Total budget :amount', ['amount' => Budget::format($this->totalBudgetCents)]) }}</flux:text>
+            <flux:text data-total-spent="{{ Price::format($summary['spent']) }}">{{ __('Spent :amount', ['amount' => Price::format($summary['spent'])]) }}</flux:text>
+            <flux:text data-total-remaining="{{ Price::format($summary['remaining']) }}">{{ __('Remaining :amount', ['amount' => Price::format($summary['remaining'])]) }}</flux:text>
         </div>
         <flux:button variant="primary" wire:click="openAddPeople" data-test="add-people-button">{{ __('Add people') }}</flux:button>
     </div>
+
+    @if ($summary['noGift'] !== [])
+        <div class="space-y-2">
+            <flux:heading>{{ __('No gift yet') }}</flux:heading>
+            @foreach ($summary['noGift'] as $name)
+                <flux:text data-no-gift="{{ $name }}">{{ $name }}</flux:text>
+            @endforeach
+        </div>
+    @endif
 
     @forelse ($this->groups as $group => $people)
         @php($label = RecipientGroup::from($group)->label())
@@ -228,11 +246,14 @@ new class extends Component
             <flux:heading>{{ $label }} ({{ $people->count() }})</flux:heading>
 
             @foreach ($people as $person)
+                @php($row = $summary['people'][$person->id])
                 <div wire:key="person-{{ $person->id }}">
                 <div data-person="{{ $person->name }}"
                     @if ($person->is_shared) data-shared @endif
                     @if ($person->archived_at) data-archived @endif
                     data-budget="{{ Budget::format($person->pivot->budget_cents) }}"
+                    data-spent="{{ Price::format($row['spent']) }}"
+                    data-remaining="{{ $row['remaining'] === null ? '' : Price::format($row['remaining']) }}"
                     class="flex items-center justify-between gap-4">
                     <div class="flex items-center gap-2">
                         <flux:text variant="strong">{{ $person->name }}</flux:text>
@@ -244,6 +265,13 @@ new class extends Component
                         @endif
                     </div>
                     <div class="flex items-center gap-2">
+                        <flux:text size="sm">{{ __('Spent :amount', ['amount' => Price::format($row['spent'])]) }}</flux:text>
+                        @if ($row['remaining'] === null)
+                        @elseif ($row['remaining'] < 0)
+                            <flux:badge size="sm" color="red" data-over-budget>{{ __(':amount over', ['amount' => Price::format(-$row['remaining'])]) }}</flux:badge>
+                        @else
+                            <flux:text size="sm">{{ __(':amount left', ['amount' => Price::format($row['remaining'])]) }}</flux:text>
+                        @endif
                         <div>
                             <flux:input.group>
                                 <flux:input.group.prefix>$</flux:input.group.prefix>

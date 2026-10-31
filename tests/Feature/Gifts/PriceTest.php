@@ -46,3 +46,15 @@ it('rejects negative prices and prices with more than two decimals', function ()
         ->and($passes('6.5'))->toBeTrue()
         ->and($passes(''))->toBeTrue();
 });
+
+it('shows a negative amount with the minus sign before the dollar sign', function () {
+    expect(Price::format(-1250))->toBe('-$12.50');
+});
+
+it('shows a negative whole-dollar amount without cents', function () {
+    expect(Price::format(-2500))->toBe('-$25');
+});
+
+it('shows a large negative amount with thousands separators', function () {
+    expect(Price::format(-123456))->toBe('-$1,234.56');
+});

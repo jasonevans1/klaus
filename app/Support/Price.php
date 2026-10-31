@@ -19,7 +19,11 @@ final class Price
 
     public static function format(?int $cents): string
     {
-        return $cents === null ? 'No price' : '$'.self::number($cents, ',');
+        if ($cents === null) {
+            return 'No price';
+        }
+
+        return $cents < 0 ? '-'.self::format(-$cents) : '$'.self::number($cents, ',');
     }
 
     public static function toDollars(?int $cents): string

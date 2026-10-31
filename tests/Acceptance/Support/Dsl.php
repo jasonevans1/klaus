@@ -240,58 +240,7 @@ final class Member
 
         auth()->logout();
 
-        $dom = new DOMDocument;
-        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
-        $xpath = new DOMXPath($dom);
-
-        $groups = [];
-        foreach ($xpath->query('//*[@data-group]') as $group) {
-            $label = $group->getAttribute('data-group');
-
-            foreach ($xpath->query('.//*[@data-person]', $group) as $row) {
-                $groups[$label][$row->getAttribute('data-person')] = $row->getAttribute('data-budget');
-            }
-        }
-
-        $total = $xpath->query('//*[@data-total-budget]')->item(0);
-        expect($total)->not->toBeNull('The occasion page shows no total budget');
-
-        // Each person's gifts are listed in the keyed block that holds the person's row.
-        $gifts = [];
-        foreach ($xpath->query('//*[@data-person]') as $row) {
-            $gifts[$row->getAttribute('data-person')] = [];
-            $block = $xpath->query('ancestor::*[@*[name()="wire:key"]][1]', $row)->item(0);
-
-            foreach ($block === null ? [] : $xpath->query('.//*[@data-gift]', $block) as $gift) {
-                $gifts[$row->getAttribute('data-person')][] = [
-                    $gift->getAttribute('data-gift'),
-                    $gift->getAttribute('data-price'),
-                    $gift->getAttribute('data-store'),
-                    $gift->getAttribute('data-url'),
-                ];
-            }
-        }
-
-        // Where each gift has got to: its status, who bought it and the one-click button on its row.
-        $progress = [];
-        foreach ($xpath->query('//*[@data-person]') as $row) {
-            $progress[$row->getAttribute('data-person')] = [];
-            $block = $xpath->query('ancestor::*[@*[name()="wire:key"]][1]', $row)->item(0);
-
-            foreach ($block === null ? [] : $xpath->query('.//*[@data-gift]', $block) as $gift) {
-                $button = $xpath->query('.//*[@data-test="advance-gift-button"]', $gift)->item(0);
-
-                $progress[$row->getAttribute('data-person')][] = [
-                    'title' => $gift->getAttribute('data-gift'),
-                    'status' => $gift->getAttribute('data-status'),
-                    'buyer' => $gift->getAttribute('data-buyer'),
-                    'button' => $button === null ? null : trim((string) preg_replace('/\s+/', ' ', $button->textContent)),
-                    'text' => trim((string) preg_replace('/\s+/', ' ', $gift->textContent)),
-                ];
-            }
-        }
-
-        return new SeenOccasion($groups, $total->getAttribute('data-total-budget'), $gifts, $progress);
+        return SeenOccasion::read($html);
     }
 
     /**
@@ -464,7 +413,7 @@ final class Member
         return Occasion::where('household_id', $this->user->household_id)->where('name', $name)->firstOrFail()->id;
     }
 
-    private function personId(string $name): int
+    public function personId(string $name): int
     {
         return Recipient::where('household_id', $this->user->household_id)->where('name', $name)->firstOrFail()->id;
     }
@@ -787,13 +736,108 @@ final class SeenOccasion
      *                                                                             each [title, price, store, link], in the order shown
      * @param  array<string, list<array{title: string, status: string, buyer: string, button: string|null, text: string}>>  $giftProgress  person name => where each
      *                                                                                                                                     of their gifts has got to, in the order shown
+     * @param  array<string, array{spent: string, remaining: string, text: string}>  $spending  person name => spent and remaining as shown
+     *                                                                                          (remaining "" when they have no budget), and their row's text
+     * @param  list<string>  $noGift  the names listed under "No gift yet", in the order shown
      */
     public function __construct(
         public readonly array $groups,
         public readonly string $totalBudget,
         public readonly array $gifts = [],
         public readonly array $giftProgress = [],
+        public readonly array $spending = [],
+        public readonly string $totalSpent = '',
+        public readonly string $totalRemaining = '',
+        public readonly array $noGift = [],
+        public readonly bool $showsNoGiftHeading = false,
     ) {}
+
+    /**
+     * Read the occasion page as it is shown.
+     */
+    public static function read(string $html): self
+    {
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+        $xpath = new DOMXPath($dom);
+
+        $groups = [];
+        foreach ($xpath->query('//*[@data-group]') as $group) {
+            $label = $group->getAttribute('data-group');
+
+            foreach ($xpath->query('.//*[@data-person]', $group) as $row) {
+                $groups[$label][$row->getAttribute('data-person')] = $row->getAttribute('data-budget');
+            }
+        }
+
+        $total = $xpath->query('//*[@data-total-budget]')->item(0);
+        expect($total)->not->toBeNull('The occasion page shows no total budget');
+
+        // Each person's gifts are listed in the keyed block that holds the person's row.
+        $gifts = [];
+        foreach ($xpath->query('//*[@data-person]') as $row) {
+            $gifts[$row->getAttribute('data-person')] = [];
+            $block = $xpath->query('ancestor::*[@*[name()="wire:key"]][1]', $row)->item(0);
+
+            foreach ($block === null ? [] : $xpath->query('.//*[@data-gift]', $block) as $gift) {
+                $gifts[$row->getAttribute('data-person')][] = [
+                    $gift->getAttribute('data-gift'),
+                    $gift->getAttribute('data-price'),
+                    $gift->getAttribute('data-store'),
+                    $gift->getAttribute('data-url'),
+                ];
+            }
+        }
+
+        // Where each gift has got to: its status, who bought it and the one-click button on its row.
+        $progress = [];
+        foreach ($xpath->query('//*[@data-person]') as $row) {
+            $progress[$row->getAttribute('data-person')] = [];
+            $block = $xpath->query('ancestor::*[@*[name()="wire:key"]][1]', $row)->item(0);
+
+            foreach ($block === null ? [] : $xpath->query('.//*[@data-gift]', $block) as $gift) {
+                $button = $xpath->query('.//*[@data-test="advance-gift-button"]', $gift)->item(0);
+
+                $progress[$row->getAttribute('data-person')][] = [
+                    'title' => $gift->getAttribute('data-gift'),
+                    'status' => $gift->getAttribute('data-status'),
+                    'buyer' => $gift->getAttribute('data-buyer'),
+                    'button' => $button === null ? null : trim((string) preg_replace('/\s+/', ' ', $button->textContent)),
+                    'text' => trim((string) preg_replace('/\s+/', ' ', $gift->textContent)),
+                ];
+            }
+        }
+
+        // What has been spent on each person and what is left of their budget, as their row shows it.
+        $spending = [];
+        foreach ($xpath->query('//*[@data-person]') as $row) {
+            $spending[$row->getAttribute('data-person')] = [
+                'spent' => $row->getAttribute('data-spent'),
+                'remaining' => $row->getAttribute('data-remaining'),
+                'text' => trim((string) preg_replace('/\s+/', ' ', $row->textContent)),
+            ];
+        }
+
+        $totalSpent = $xpath->query('//*[@data-total-spent]')->item(0);
+        $totalRemaining = $xpath->query('//*[@data-total-remaining]')->item(0);
+
+        $noGift = [];
+        foreach ($xpath->query('//*[@data-no-gift]') as $row) {
+            $noGift[] = $row->getAttribute('data-no-gift');
+        }
+
+        return new self(
+            $groups,
+            $total->getAttribute('data-total-budget'),
+            $gifts,
+            $progress,
+            $spending,
+            $totalSpent?->getAttribute('data-total-spent') ?? '',
+            $totalRemaining?->getAttribute('data-total-remaining') ?? '',
+            $noGift,
+            str_contains((string) preg_replace('/\s+/', ' ', $dom->textContent), 'No gift yet'),
+        );
+    }
 }
 
 /**
@@ -829,6 +873,47 @@ final class OpenOccasionPage
         }
 
         auth()->logout();
+    }
+
+    /**
+     * Type a whole-dollar budget for the person on this page; null empties the field (no budget).
+     */
+    public function setsBudget(string $for, ?int $dollars): void
+    {
+        Livewire::actingAs($this->member->user);
+        $this->page->set('budgets.'.$this->member->personId($for), $dollars === null ? '' : (string) $dollars)->assertHasNoErrors();
+
+        auth()->logout();
+    }
+
+    /**
+     * Delete the person's gift called $title from this page.
+     */
+    public function deletesGift(string $for, string $title): void
+    {
+        Livewire::actingAs($this->member->user);
+        $this->page->call('deleteGift', $this->member->giftId($for, $title));
+
+        auth()->logout();
+    }
+
+    /**
+     * Remove the person from the occasion on this page.
+     */
+    public function removes(string $name): void
+    {
+        Livewire::actingAs($this->member->user);
+        $this->page->call('remove', $this->member->personId($name));
+
+        auth()->logout();
+    }
+
+    /**
+     * What this page shows me now, without reloading it.
+     */
+    public function shows(): SeenOccasion
+    {
+        return SeenOccasion::read($this->page->html());
     }
 }
 
