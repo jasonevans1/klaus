@@ -82,7 +82,7 @@ Each feature is one HCF plan, small enough to build, test and deploy on its own.
   - Done when: Pluto's eight gifts are eight separate rows.
 - [x] **6. Gift status and buyer** — Move a gift through Idea → Bought → Wrapped → Given; record who bought it.
   - Done when: one click advances a gift and shows who bought it.
-- [ ] **7. Occasion overview** — People grouped by group, budget vs. spent vs. remaining per person, season totals, people with no gift.
+- [x] **7. Occasion overview** — People grouped by group, budget vs. spent vs. remaining per person, season totals, people with no gift.
   - Done when: the overview replaces the spreadsheet for Christmas 2026.
 - [ ] **8. Shopping list** — Every gift still at Idea on the occasion, across all people.
   - Done when: I can shop from one screen.
