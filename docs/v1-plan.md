@@ -84,7 +84,7 @@ Each feature is one HCF plan, small enough to build, test and deploy on its own.
   - Done when: one click advances a gift and shows who bought it.
 - [x] **7. Occasion overview** — People grouped by group, budget vs. spent vs. remaining per person, season totals, people with no gift.
   - Done when: the overview replaces the spreadsheet for Christmas 2026.
-- [ ] **8. Shopping list** — Every gift still at Idea on the occasion, across all people.
+- [x] **8. Shopping list** — Every gift still at Idea on the occasion, across all people.
   - Done when: I can shop from one screen.
 - [ ] **9. Wrapping checklist** — Every gift at Bought, checked off as Wrapped.
   - Done when: wrapping night is one list.
