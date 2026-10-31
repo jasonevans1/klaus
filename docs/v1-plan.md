@@ -80,7 +80,7 @@ Each feature is one HCF plan, small enough to build, test and deploy on its own.
   - Done when: Christmas 2026 lists everyone with a budget.
 - [x] **5. Gifts on an occasion** — Add, edit and delete gifts per person: title, price, store, product link.
   - Done when: Pluto's eight gifts are eight separate rows.
-- [ ] **6. Gift status and buyer** — Move a gift through Idea → Bought → Wrapped → Given; record who bought it.
+- [x] **6. Gift status and buyer** — Move a gift through Idea → Bought → Wrapped → Given; record who bought it.
   - Done when: one click advances a gift and shows who bought it.
 - [ ] **7. Occasion overview** — People grouped by group, budget vs. spent vs. remaining per person, season totals, people with no gift.
   - Done when: the overview replaces the spreadsheet for Christmas 2026.
