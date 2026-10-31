@@ -228,7 +228,10 @@ new class extends Component
             <flux:text data-total-spent="{{ Price::format($summary['spent']) }}">{{ __('Spent :amount', ['amount' => Price::format($summary['spent'])]) }}</flux:text>
             <flux:text data-total-remaining="{{ Price::format($summary['remaining']) }}">{{ __('Remaining :amount', ['amount' => Price::format($summary['remaining'])]) }}</flux:text>
         </div>
-        <flux:button variant="primary" wire:click="openAddPeople" data-test="add-people-button">{{ __('Add people') }}</flux:button>
+        <div class="flex items-center gap-2">
+            <flux:button :href="route('occasions.shopping', $this->occasion)" wire:navigate data-test="shopping-list-link">{{ __('Shopping list') }}</flux:button>
+            <flux:button variant="primary" wire:click="openAddPeople" data-test="add-people-button">{{ __('Add people') }}</flux:button>
+        </div>
     </div>
 
     @if ($summary['noGift'] !== [])

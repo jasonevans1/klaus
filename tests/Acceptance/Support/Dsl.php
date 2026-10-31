@@ -353,6 +353,33 @@ final class Member
         auth()->logout();
     }
 
+    /**
+     * What the occasion's shopping list shows me: every gift still to buy, for everyone, and how many and how much.
+     */
+    public function shoppingList(string $occasion): SeenShoppingList
+    {
+        $html = Livewire::actingAs($this->user)
+            ->test('pages::occasions.shopping', ['occasion' => $this->occasionId($occasion)])
+            ->html();
+
+        auth()->logout();
+
+        return SeenShoppingList::read($html);
+    }
+
+    /**
+     * Open the occasion's shopping list and leave it open, so I can tick things off as I shop.
+     */
+    public function opensShoppingList(string $occasion): OpenShoppingList
+    {
+        $page = Livewire::actingAs($this->user)
+            ->test('pages::occasions.shopping', ['occasion' => $this->occasionId($occasion)]);
+
+        auth()->logout();
+
+        return new OpenShoppingList($this, $page);
+    }
+
     public function giftId(string $for, string $title): int
     {
         return Gift::where('household_id', $this->user->household_id)
@@ -969,4 +996,94 @@ final class GiftEntry
 function gift(string $title): GiftEntry
 {
     return new GiftEntry($title);
+}
+
+/**
+ * A shopping list as I see it: each gift still to buy as [who it is for, title, price, store, link], in the order shown,
+ * plus the header's count and total, the header's text, and whether it says there is nothing left to buy.
+ */
+final class SeenShoppingList
+{
+    /**
+     * @param  list<array{string, string, string, string, string}>  $ideas
+     */
+    public function __construct(
+        public readonly array $ideas,
+        public readonly string $count,
+        public readonly string $total,
+        public readonly string $header,
+        public readonly bool $saysNothingLeft,
+    ) {}
+
+    public static function read(string $html): self
+    {
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+        $xpath = new DOMXPath($dom);
+
+        $ideas = [];
+        foreach ($xpath->query('//*[@data-idea]') as $row) {
+            $ideas[] = [
+                $row->getAttribute('data-for'),
+                $row->getAttribute('data-idea'),
+                $row->getAttribute('data-price'),
+                $row->getAttribute('data-store'),
+                $row->getAttribute('data-url'),
+            ];
+        }
+
+        $count = $xpath->query('//*[@data-ideas-count]')->item(0);
+        $total = $xpath->query('//*[@data-ideas-total]')->item(0);
+        expect($count)->not->toBeNull('The shopping list shows no count of ideas left')
+            ->and($total)->not->toBeNull('The shopping list shows no total of ideas left');
+
+        return new self(
+            $ideas,
+            $count->getAttribute('data-ideas-count'),
+            $total->getAttribute('data-ideas-total'),
+            trim((string) preg_replace('/\s+/', ' ', $count->textContent)),
+            str_contains((string) preg_replace('/\s+/', ' ', $dom->textContent), 'Nothing left to buy.'),
+        );
+    }
+}
+
+/**
+ * A shopping list I opened earlier and left open; what I click on it is sent from the list as I last saw it.
+ */
+final class OpenShoppingList
+{
+    public function __construct(
+        public readonly Member $member,
+        public readonly Testable $page,
+    ) {}
+
+    /**
+     * Click Mark bought on the person's gift as this list shows it.
+     */
+    public function marksBought(string $for, string $title): void
+    {
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$this->page->html());
+        $xpath = new DOMXPath($dom);
+
+        $row = $xpath->query('//*[@data-for="'.$for.'"][@data-idea="'.$title.'"]')->item(0);
+        $button = $row === null ? null : $xpath->query('.//*[@data-test="mark-bought-button"]', $row)->item(0);
+        expect($button)->not->toBeNull("{$title} has no Mark bought button on the list");
+
+        expect(preg_match('/^(\w+)\((.*)\)$/', $button->getAttribute('wire:click'), $call))->toBe(1);
+        $params = json_decode('['.str_replace("'", '"', $call[2]).']', true);
+
+        Livewire::actingAs($this->member->user);
+        $this->page->call($call[1], ...$params);
+
+        auth()->logout();
+    }
+
+    /**
+     * What this list shows me now, without reloading it.
+     */
+    public function shows(): SeenShoppingList
+    {
+        return SeenShoppingList::read($this->page->html());
+    }
 }
