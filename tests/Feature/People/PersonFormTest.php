@@ -115,3 +115,57 @@ it('keeps the group but clears the other fields when adding another', function (
         ->assertSet('form.birthday_month', '')
         ->assertSet('form.interests', '');
 });
+
+it('starts with an empty form defaulting to the family group', function () {
+    Livewire::test(PersonFormHost::class)
+        ->assertSet('form.name', '')
+        ->assertSet('form.group', 'family')
+        ->assertSet('form.is_shared', false)
+        ->assertSet('form.birthday_month', '')
+        ->assertSet('form.birthday_day', '')
+        ->assertSet('form.birthday_year', '')
+        ->assertSet('form.interests', '');
+});
+
+it('requires a group', function () {
+    personForm(['form.group' => ''])->call('save')->assertHasErrors(['form.group' => 'required']);
+});
+
+it('requires numeric birthday parts', function () {
+    personForm(['form.birthday_day' => 'abc'])->call('save')->assertHasErrors(['form.birthday_day' => 'integer']);
+    personForm(['form.birthday_year' => 'abc'])->call('save')->assertHasErrors(['form.birthday_year' => 'integer']);
+    personForm(['form.birthday_month' => 'abc'])->call('save')->assertHasErrors(['form.birthday_month' => 'integer']);
+});
+
+it('accepts blank birthday parts and blank interests', function () {
+    personForm()->call('save')->assertHasNoErrors();
+});
+
+it('limits interests to 1000 characters', function () {
+    personForm(['form.interests' => str_repeat('a', 1001)])->call('save')->assertHasErrors(['form.interests' => 'max']);
+    personForm(['form.interests' => str_repeat('a', 1000)])->call('save')->assertHasNoErrors();
+});
+
+it('fills blank interests when the person has none', function () {
+    $person = Recipient::factory()->create(['interests' => null]);
+
+    Livewire::test(PersonFormHost::class)
+        ->call('load', $person->id)
+        ->assertSet('form.interests', '');
+});
+
+it('keeps non-empty interests in the normalised data', function () {
+    $component = personForm(['form.interests' => 'Chess', 'form.is_shared' => true]);
+    $form = new PersonForm($component->instance(), 'form');
+    $form->fill($component->get('form'));
+
+    expect($form->data())->toMatchArray(['name' => 'Ann', 'interests' => 'Chess', 'is_shared' => true]);
+});
+
+it('normalises blank interests to a strict null', function () {
+    $component = personForm();
+    $form = new PersonForm($component->instance(), 'form');
+    $form->fill($component->get('form'));
+
+    expect($form->data()['interests'])->toBeNull();
+});
