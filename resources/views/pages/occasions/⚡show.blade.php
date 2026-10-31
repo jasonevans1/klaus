@@ -1,11 +1,13 @@
 <?php
 
 use App\Actions\Gifts\AddGift;
+use App\Actions\Gifts\AdvanceGiftStatus;
 use App\Actions\Gifts\DeleteGift;
 use App\Actions\Gifts\UpdateGift;
 use App\Actions\Occasions\AddPeopleToOccasion;
 use App\Actions\Occasions\RemovePersonFromOccasion;
 use App\Actions\Occasions\SetBudget;
+use App\Enums\GiftStatus;
 use App\Enums\RecipientGroup;
 use App\Livewire\Forms\GiftForm;
 use App\Models\Occasion;
@@ -118,6 +120,19 @@ new class extends Component
         Flux::toast(variant: 'success', text: __('Gift deleted.'));
     }
 
+    public function advanceGift(int $giftId, string $from): void
+    {
+        $status = GiftStatus::tryFrom($from);
+
+        if ($status === null) {
+            return;
+        }
+
+        app(AdvanceGiftStatus::class)->handle(Auth::user(), $giftId, $status);
+
+        unset($this->giftsByPerson);
+    }
+
     public function saveGift(): void
     {
         $this->persistGift();
@@ -146,6 +161,12 @@ new class extends Component
     public function giftsByPerson(): array
     {
         return app(GiftRepository::class)->byPerson(Auth::user(), $this->occasion);
+    }
+
+    #[Computed]
+    public function buyers(): Collection
+    {
+        return app(GiftRepository::class)->buyers(Auth::user());
     }
 
     #[Computed]
@@ -237,7 +258,7 @@ new class extends Component
 
                 <div class="space-y-1 pl-4 pt-2">
                     @foreach ($this->giftsByPerson[$person->id] ?? [] as $gift)
-                        <div wire:key="gift-{{ $gift->id }}" data-gift="{{ $gift->title }}" data-price="{{ Price::format($gift->price_cents) }}" data-store="{{ $gift->store }}" data-url="{{ $gift->url }}" class="flex items-center gap-4">
+                        <div wire:key="gift-{{ $gift->id }}" data-gift="{{ $gift->title }}" data-price="{{ Price::format($gift->price_cents) }}" data-store="{{ $gift->store }}" data-url="{{ $gift->url }}" data-status="{{ $gift->status->label() }}" data-buyer="{{ $gift->purchasedBy?->name }}" class="flex items-center gap-4">
                             @if ($gift->url)
                                 <a href="{{ $gift->url }}" target="_blank" rel="noopener noreferrer" class="underline">{{ $gift->title }}</a>
                             @else
@@ -246,6 +267,13 @@ new class extends Component
                             <flux:text size="sm">{{ Price::format($gift->price_cents) }}</flux:text>
                             @if ($gift->store)
                                 <flux:text size="sm">{{ $gift->store }}</flux:text>
+                            @endif
+                            <flux:badge size="sm">{{ $gift->status->label() }}</flux:badge>
+                            @if ($gift->purchasedBy)
+                                <flux:text size="sm">{{ __('Bought by :name', ['name' => $gift->purchasedBy->name]) }}</flux:text>
+                            @endif
+                            @if ($next = $gift->status->next())
+                                <flux:button size="xs" wire:click="advanceGift({{ $gift->id }}, '{{ $gift->status->value }}')" data-test="advance-gift-button">{{ __('Mark :status', ['status' => strtolower($next->label())]) }}</flux:button>
                             @endif
                             <flux:button size="xs" wire:click="editGift({{ $gift->id }})" data-test="edit-gift-button">{{ __('Edit') }}</flux:button>
                             <flux:button size="xs" wire:click="deleteGift({{ $gift->id }})" wire:confirm="{{ __('Delete :title?', ['title' => $gift->title]) }}" data-test="delete-gift-button">{{ __('Delete') }}</flux:button>
@@ -302,6 +330,19 @@ new class extends Component
 
             <flux:input wire:model="giftForm.store" :label="__('Store')" />
             <flux:input wire:model="giftForm.url" :label="__('Link')" />
+
+            <flux:select wire:model="giftForm.status" :label="__('Status')">
+                @foreach (GiftStatus::cases() as $status)
+                    <flux:select.option value="{{ $status->value }}">{{ $status->label() }}</flux:select.option>
+                @endforeach
+            </flux:select>
+
+            <flux:select wire:model="giftForm.buyerId" :label="__('Bought by')">
+                <flux:select.option value="">—</flux:select.option>
+                @foreach ($this->buyers as $buyer)
+                    <flux:select.option value="{{ $buyer->id }}">{{ $buyer->name }}</flux:select.option>
+                @endforeach
+            </flux:select>
 
             <div class="flex justify-end gap-2">
                 @unless ($giftForm->giftId)

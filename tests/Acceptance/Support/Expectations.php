@@ -120,3 +120,36 @@ expect()->extend('toShowTotalBudget', function (string $total) {
 
     return $this;
 });
+
+/**
+ * The person's gift shows this status and buyer ("Bought by ..."), and offers the next step's button (none once Given).
+ */
+expect()->extend('toShowGiftStatus', function (string $person, string $gift, string $status, ?string $boughtBy = null) {
+    expect($this->value)->toBeInstanceOf(SeenOccasion::class);
+
+    $rows = array_values(array_filter(
+        $this->value->giftProgress[$person] ?? [],
+        fn (array $row) => $row['title'] === $gift,
+    ));
+
+    expect($rows)->toHaveCount(1, "Expected exactly one gift called {$gift} under {$person}");
+
+    $button = match ($status) {
+        'Idea' => 'Mark bought',
+        'Bought' => 'Mark wrapped',
+        'Wrapped' => 'Mark given',
+        'Given' => null,
+    };
+
+    expect($rows[0]['status'])->toBe($status)
+        ->and($rows[0]['buyer'])->toBe($boughtBy ?? '')
+        ->and($rows[0]['button'])->toBe($button);
+
+    if ($boughtBy === null) {
+        expect($rows[0]['text'])->not->toContain('Bought by');
+    } else {
+        expect($rows[0]['text'])->toContain("Bought by {$boughtBy}");
+    }
+
+    return $this;
+});

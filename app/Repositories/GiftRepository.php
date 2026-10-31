@@ -25,9 +25,18 @@ class GiftRepository
         return Gift::query()
             ->where('household_id', $user->household_id)
             ->where('occasion_id', $occasion->id)
+            ->with('purchasedBy')
             ->orderBy('id')
             ->get()
             ->groupBy('recipient_id')
             ->all();
+    }
+
+    /**
+     * @return Collection<int, User>
+     */
+    public function buyers(User $user): Collection
+    {
+        return User::query()->where('household_id', $user->household_id)->orderBy('name')->get();
     }
 }

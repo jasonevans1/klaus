@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\GiftStatus;
 use Database\Factories\GiftFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -16,6 +17,8 @@ use Illuminate\Support\Carbon;
  * @property int $recipient_id
  * @property int|null $occasion_id
  * @property string $title
+ * @property GiftStatus $status
+ * @property int|null $purchased_by_user_id
  * @property int|null $price_cents
  * @property string|null $store
  * @property string|null $url
@@ -25,11 +28,14 @@ use Illuminate\Support\Carbon;
  * @property-read Household $household
  * @property-read Recipient $recipient
  * @property-read Occasion|null $occasion
+ * @property-read User|null $purchasedBy
  */
 class Gift extends Model
 {
     /** @use HasFactory<GiftFactory> */
     use HasFactory;
+
+    protected $attributes = ['status' => 'idea'];
 
     protected $fillable = [
         'title',
@@ -44,6 +50,7 @@ class Gift extends Model
     protected function casts(): array
     {
         return [
+            'status' => GiftStatus::class,
             'price_cents' => 'integer',
         ];
     }
@@ -78,5 +85,13 @@ class Gift extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function purchasedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'purchased_by_user_id');
     }
 }

@@ -2,8 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Enums\GiftStatus;
 use App\Livewire\Forms\GiftForm;
 use App\Models\Gift;
+use App\Models\User;
 use Livewire\Component;
 use Livewire\Livewire;
 
@@ -66,7 +68,7 @@ it('turns a blank price, store and link into nothing', function () {
     $form = new GiftForm($component->instance(), 'form');
     $form->fill($component->get('form'));
 
-    expect($form->data())->toBe(['title' => 'Book', 'price_cents' => null, 'store' => null, 'url' => null]);
+    expect($form->data())->toMatchArray(['title' => 'Book', 'price_cents' => null, 'store' => null, 'url' => null]);
 });
 
 it('fills the form from an existing gift', function () {
@@ -92,4 +94,56 @@ it('keeps the person when getting ready for the next gift', function () {
         ->assertSet('form.title', '')
         ->assertSet('form.price', '')
         ->assertSet('form.store', '');
+});
+
+it('starts a new gift form at Idea with no buyer', function () {
+    Livewire::test(GiftFormHost::class)
+        ->assertSet('form.status', 'idea')
+        ->assertSet('form.buyerId', '');
+});
+
+it('rejects a status that is not a gift status', function () {
+    giftForm(['form.status' => 'lost'])->call('save')->assertHasErrors('form.status');
+    giftForm(['form.status' => 'bought'])->call('save')->assertHasNoErrors();
+});
+
+it('rejects a buyer who is not in the household', function () {
+    $user = User::factory()->create();
+    $mine = User::factory()->forHousehold($user->household)->create();
+    $stranger = User::factory()->create();
+
+    $this->actingAs($user);
+
+    giftForm(['form.buyerId' => (string) $stranger->id])->call('save')->assertHasErrors('form.buyerId');
+    giftForm(['form.buyerId' => (string) $mine->id])->call('save')->assertHasNoErrors();
+});
+
+it('passes the status and buyer on with the gift details', function () {
+    $user = User::factory()->create();
+    $component = giftForm(['form.status' => 'wrapped', 'form.buyerId' => (string) $user->id]);
+
+    $form = new GiftForm($component->instance(), 'form');
+    $form->fill($component->get('form'));
+
+    expect($form->data())->toMatchArray(['status' => GiftStatus::Wrapped, 'purchased_by_user_id' => $user->id]);
+
+    $form->fill(['status' => 'idea', 'buyerId' => '']);
+    expect($form->data())->toMatchArray(['status' => GiftStatus::Idea, 'purchased_by_user_id' => null]);
+});
+
+it('fills the status and buyer from an existing gift', function () {
+    $buyer = User::factory()->create();
+    $gift = Gift::factory()->bought($buyer)->create();
+
+    Livewire::test(GiftFormHost::class)
+        ->call('load', $gift->id)
+        ->assertSet('form.status', 'bought')
+        ->assertSet('form.buyerId', (string) $buyer->id);
+});
+
+it('goes back to Idea with no buyer when getting ready for the next gift', function () {
+    giftForm(['form.status' => 'given', 'form.buyerId' => '3'])
+        ->call('next')
+        ->assertSet('form.status', 'idea')
+        ->assertSet('form.buyerId', '');
 });

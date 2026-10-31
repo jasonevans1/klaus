@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use App\Actions\Gifts\AddGift;
+use App\Actions\Gifts\AdvanceGiftStatus;
 use App\Actions\Gifts\DeleteGift;
 use App\Actions\Gifts\UpdateGift;
+use App\Enums\GiftStatus;
 use App\Models\Gift;
 use App\Models\Occasion;
 use App\Models\Recipient;
@@ -13,7 +15,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 function giftData(array $overrides = []): array
 {
-    return array_merge(['title' => 'Lego set', 'price_cents' => 4999, 'store' => 'Toys R Us', 'url' => 'https://example.com/lego'], $overrides);
+    return array_merge(['title' => 'Lego set', 'price_cents' => 4999, 'store' => 'Toys R Us', 'url' => 'https://example.com/lego', 'status' => GiftStatus::Idea, 'purchased_by_user_id' => null], $overrides);
 }
 
 function giftSetup(): array
@@ -92,4 +94,103 @@ it("refuses to update or delete another household's gift", function () {
     expect(fn () => app(UpdateGift::class)->handle($user, $gift->id, giftData()))->toThrow(ModelNotFoundException::class);
     expect(fn () => app(DeleteGift::class)->handle($user, $gift->id))->toThrow(ModelNotFoundException::class);
     expect($gift->fresh()->title)->toBe('Original');
+});
+
+it('marks an idea as bought by whoever clicked', function () {
+    [$user, $occasion, $person] = giftSetup();
+    $gift = Gift::factory()->forPersonOn($person, $occasion)->create();
+
+    app(AdvanceGiftStatus::class)->handle($user, $gift->id, GiftStatus::Idea);
+
+    $gift->refresh();
+    expect($gift->status)->toBe(GiftStatus::Bought)
+        ->and($gift->purchased_by_user_id)->toBe($user->id);
+});
+
+it('moves a bought gift to wrapped and keeps the buyer', function () {
+    [$user, $occasion, $person] = giftSetup();
+    $partner = User::factory()->create(['household_id' => $user->household_id]);
+    $gift = Gift::factory()->forPersonOn($person, $occasion)->bought($partner)->create();
+
+    app(AdvanceGiftStatus::class)->handle($user, $gift->id, GiftStatus::Bought);
+
+    $gift->refresh();
+    expect($gift->status)->toBe(GiftStatus::Wrapped)
+        ->and($gift->purchased_by_user_id)->toBe($partner->id);
+});
+
+it('moves a wrapped gift to given', function () {
+    [$user, $occasion, $person] = giftSetup();
+    $gift = Gift::factory()->forPersonOn($person, $occasion)->wrapped($user)->create();
+
+    app(AdvanceGiftStatus::class)->handle($user, $gift->id, GiftStatus::Wrapped);
+
+    expect($gift->refresh()->status)->toBe(GiftStatus::Given);
+});
+
+it('leaves a given gift as given', function () {
+    [$user, $occasion, $person] = giftSetup();
+    $gift = Gift::factory()->forPersonOn($person, $occasion)->given($user)->create();
+
+    app(AdvanceGiftStatus::class)->handle($user, $gift->id, GiftStatus::Given);
+
+    expect($gift->refresh()->status)->toBe(GiftStatus::Given);
+});
+
+it("refuses to advance another household's gift", function () {
+    [$user] = giftSetup();
+    $gift = Gift::factory()->create();
+
+    expect(fn () => app(AdvanceGiftStatus::class)->handle($user, $gift->id, GiftStatus::Idea))
+        ->toThrow(ModelNotFoundException::class);
+    expect($gift->fresh()->status)->toBe(GiftStatus::Idea);
+});
+
+it('leaves a gift alone when it has already moved on from the status that was clicked', function () {
+    [$user, $occasion, $person] = giftSetup();
+    $gift = Gift::factory()->forPersonOn($person, $occasion)->bought($user)->create();
+
+    app(AdvanceGiftStatus::class)->handle($user, $gift->id, GiftStatus::Idea);
+
+    expect($gift->refresh()->status)->toBe(GiftStatus::Bought);
+});
+
+it('saves the status and buyer picked when adding or editing a gift', function () {
+    [$user, $occasion, $person] = giftSetup();
+    $partner = User::factory()->create(['household_id' => $user->household_id]);
+
+    $gift = app(AddGift::class)->handle($user, $occasion->id, $person->id, giftData(['status' => GiftStatus::Bought, 'purchased_by_user_id' => $partner->id]));
+    expect($gift->fresh()->status)->toBe(GiftStatus::Bought)
+        ->and($gift->fresh()->purchased_by_user_id)->toBe($partner->id);
+
+    app(UpdateGift::class)->handle($user, $gift->id, giftData(['status' => GiftStatus::Wrapped, 'purchased_by_user_id' => $user->id]));
+    expect($gift->fresh()->status)->toBe(GiftStatus::Wrapped)
+        ->and($gift->fresh()->purchased_by_user_id)->toBe($user->id);
+});
+
+it('clears the buyer when a gift is set back to Idea', function () {
+    [$user, $occasion, $person] = giftSetup();
+    $gift = Gift::factory()->forPersonOn($person, $occasion)->bought($user)->create();
+
+    app(UpdateGift::class)->handle($user, $gift->id, giftData(['status' => GiftStatus::Idea, 'purchased_by_user_id' => $user->id]));
+
+    expect($gift->fresh()->status)->toBe(GiftStatus::Idea)
+        ->and($gift->fresh()->purchased_by_user_id)->toBeNull();
+});
+
+it('makes the person saving the buyer when a bought gift has no buyer picked', function () {
+    [$user, $occasion, $person] = giftSetup();
+
+    $gift = app(AddGift::class)->handle($user, $occasion->id, $person->id, giftData(['status' => GiftStatus::Bought]));
+
+    expect($gift->fresh()->purchased_by_user_id)->toBe($user->id);
+});
+
+it('refuses a buyer from another household', function () {
+    [$user, $occasion, $person] = giftSetup();
+    $stranger = User::factory()->create();
+
+    expect(fn () => app(AddGift::class)->handle($user, $occasion->id, $person->id, giftData(['status' => GiftStatus::Bought, 'purchased_by_user_id' => $stranger->id])))
+        ->toThrow(ModelNotFoundException::class);
+    expect(Gift::count())->toBe(0);
 });
