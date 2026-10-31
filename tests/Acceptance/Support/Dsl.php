@@ -272,7 +272,79 @@ final class Member
             }
         }
 
-        return new SeenOccasion($groups, $total->getAttribute('data-total-budget'), $gifts);
+        // Where each gift has got to: its status, who bought it and the one-click button on its row.
+        $progress = [];
+        foreach ($xpath->query('//*[@data-person]') as $row) {
+            $progress[$row->getAttribute('data-person')] = [];
+            $block = $xpath->query('ancestor::*[@*[name()="wire:key"]][1]', $row)->item(0);
+
+            foreach ($block === null ? [] : $xpath->query('.//*[@data-gift]', $block) as $gift) {
+                $button = $xpath->query('.//*[@data-test="advance-gift-button"]', $gift)->item(0);
+
+                $progress[$row->getAttribute('data-person')][] = [
+                    'title' => $gift->getAttribute('data-gift'),
+                    'status' => $gift->getAttribute('data-status'),
+                    'buyer' => $gift->getAttribute('data-buyer'),
+                    'button' => $button === null ? null : trim((string) preg_replace('/\s+/', ' ', $button->textContent)),
+                    'text' => trim((string) preg_replace('/\s+/', ' ', $gift->textContent)),
+                ];
+            }
+        }
+
+        return new SeenOccasion($groups, $total->getAttribute('data-total-budget'), $gifts, $progress);
+    }
+
+    /**
+     * Open the occasion page and leave it open, so I can click on it later (after my partner has changed things).
+     */
+    public function opens(string $occasion): OpenOccasionPage
+    {
+        $page = Livewire::actingAs($this->user)
+            ->test('pages::occasions.show', ['occasion' => $this->occasionId($occasion)]);
+
+        auth()->logout();
+
+        return new OpenOccasionPage($this, $page);
+    }
+
+    /**
+     * Click the one-click button on the person's gift (Mark bought / Mark wrapped / Mark given) on the occasion page.
+     */
+    public function advancesGift(string $on, string $for, string $title): void
+    {
+        $this->opens($on)->advancesGift($for, $title);
+    }
+
+    /**
+     * Double-click the one-click button on the person's gift: both clicks are sent from the page as it was.
+     */
+    public function doubleClicksAdvance(string $on, string $for, string $title): void
+    {
+        $this->opens($on)->advancesGift($for, $title, times: 2);
+    }
+
+    /**
+     * Open the person's gift in the gift window, pick a status (Idea, Bought, Wrapped, Given) and who bought it, and save.
+     * With no buyer the "Bought by" choice is left empty.
+     */
+    public function setsGiftStatus(string $on, string $for, string $title, string $status, ?string $by = null): void
+    {
+        $page = Livewire::actingAs($this->user)
+            ->test('pages::occasions.show', ['occasion' => $this->occasionId($on)])
+            ->call('editGift', $this->giftId($for, $title));
+
+        $this->entersStatus($page, $status, $by);
+
+        $page->call('saveGift')->assertHasNoErrors();
+
+        auth()->logout();
+    }
+
+    private function entersStatus(Testable $page, string $status, ?string $by): void
+    {
+        $buyerId = $by === null ? '' : (string) User::where('household_id', $this->user->household_id)->where('name', $by)->firstOrFail()->id;
+
+        $page->set('giftForm.status', strtolower($status))->set('giftForm.buyerId', $buyerId);
     }
 
     /**
@@ -289,8 +361,13 @@ final class Member
             $page->set('giftForm.title', $gift->title)
                 ->set('giftForm.price', $gift->price)
                 ->set('giftForm.store', $gift->store)
-                ->set('giftForm.url', $gift->link)
-                ->call($i === array_key_last($gifts) ? 'saveGift' : 'saveGiftAndAddAnother')
+                ->set('giftForm.url', $gift->link);
+
+            if ($gift->status !== null) {
+                $this->entersStatus($page, $gift->status, $gift->buyer);
+            }
+
+            $page->call($i === array_key_last($gifts) ? 'saveGift' : 'saveGiftAndAddAnother')
                 ->assertHasNoErrors();
         }
 
@@ -327,7 +404,7 @@ final class Member
         auth()->logout();
     }
 
-    private function giftId(string $for, string $title): int
+    public function giftId(string $for, string $title): int
     {
         return Gift::where('household_id', $this->user->household_id)
             ->where('recipient_id', $this->personId($for))
@@ -708,12 +785,51 @@ final class SeenOccasion
      * @param  array<string, array<string, string>>  $groups
      * @param  array<string, list<array{string, string, string, string}>>  $gifts  person name => their gifts as shown,
      *                                                                             each [title, price, store, link], in the order shown
+     * @param  array<string, list<array{title: string, status: string, buyer: string, button: string|null, text: string}>>  $giftProgress  person name => where each
+     *                                                                                                                                     of their gifts has got to, in the order shown
      */
     public function __construct(
         public readonly array $groups,
         public readonly string $totalBudget,
         public readonly array $gifts = [],
+        public readonly array $giftProgress = [],
     ) {}
+}
+
+/**
+ * An occasion page I opened earlier and left open; what I click on it is sent from the page as I last saw it.
+ */
+final class OpenOccasionPage
+{
+    public function __construct(
+        public readonly Member $member,
+        public readonly Testable $page,
+    ) {}
+
+    /**
+     * Click the one-click button on the person's gift as this page shows it, $times times in a row.
+     */
+    public function advancesGift(string $for, string $title, int $times = 1): void
+    {
+        $html = $this->page->html();
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+        $xpath = new DOMXPath($dom);
+
+        $row = $xpath->query('//*[@data-person="'.$for.'"]/following-sibling::*//*[@data-gift="'.$title.'"]')->item(0);
+        $button = $row === null ? null : $xpath->query('.//*[@data-test="advance-gift-button"]', $row)->item(0);
+        expect($button)->not->toBeNull("{$title} has no advance button on the page");
+
+        expect(preg_match('/^(\w+)\((.*)\)$/', $button->getAttribute('wire:click'), $call))->toBe(1);
+        $params = json_decode('['.str_replace("'", '"', $call[2]).']', true);
+
+        Livewire::actingAs($this->member->user);
+        for ($i = 0; $i < $times; $i++) {
+            $this->page->call($call[1], ...$params);
+        }
+
+        auth()->logout();
+    }
 }
 
 /**
@@ -727,7 +843,21 @@ final class GiftEntry
 
     public string $link = '';
 
+    public ?string $status = null;
+
+    public ?string $buyer = null;
+
     public function __construct(public readonly string $title) {}
+
+    /**
+     * Enter the gift with a status other than Idea (e.g. it is already bought) and who bought it.
+     */
+    public function thatIs(string $status, ?string $by = null): self
+    {
+        [$this->status, $this->buyer] = [$status, $by];
+
+        return $this;
+    }
 
     public function costing(string $dollars): self
     {

@@ -2,10 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Enums\GiftStatus;
 use App\Models\Gift;
 use App\Models\Occasion;
 use App\Models\Recipient;
 use App\Models\User;
+use Illuminate\Support\Arr;
 use Livewire\Livewire;
 
 function christmasFor(User $user): Occasion
@@ -33,6 +35,7 @@ function giftFor(User $user, $occasion, $person, array $attrs = []): Gift
     $gift->occasion_id = $occasion->id;
     $gift->recipient_id = $person->id;
     $gift->created_by_user_id = $user->id;
+    $gift->forceFill(Arr::only($attrs, ['status', 'purchased_by_user_id']));
     $gift->save();
 
     return $gift;
@@ -241,4 +244,128 @@ it('removes the person\'s gifts from the page when they are removed', function (
     giftsPage($user, $occasion)
         ->call('remove', $mum->id)
         ->assertDontSeeHtml('data-gift="Scarf"');
+});
+
+it('shows each gift\'s status on the occasion page', function () {
+    $user = User::factory()->create();
+    $occasion = christmasFor($user);
+    giftFor($user, $occasion, personFor($occasion, 'Mum'));
+
+    giftsPage($user, $occasion)
+        ->assertSeeHtml('data-status="Idea"')
+        ->assertSeeHtml('Mark bought');
+});
+
+it('advances a gift one step with one click', function () {
+    $user = User::factory()->create();
+    $occasion = christmasFor($user);
+    $gift = giftFor($user, $occasion, personFor($occasion, 'Mum'));
+
+    giftsPage($user, $occasion)->call('advanceGift', $gift->id, 'idea')
+        ->assertSeeHtml('data-status="Bought"')
+        ->assertSeeHtml('Mark wrapped');
+
+    expect($gift->refresh()->status)->toBe(GiftStatus::Bought);
+});
+
+it('shows who bought a gift once it is marked bought', function () {
+    $user = User::factory()->create(['name' => 'Sam']);
+    $occasion = christmasFor($user);
+    $gift = giftFor($user, $occasion, personFor($occasion, 'Mum'));
+
+    giftsPage($user, $occasion)->call('advanceGift', $gift->id, 'idea')
+        ->assertSeeHtml('data-buyer="Sam"')
+        ->assertSee('Bought by Sam');
+});
+
+it('shows no advance button on a given gift', function () {
+    $user = User::factory()->create();
+    $occasion = christmasFor($user);
+    $gift = giftFor($user, $occasion, personFor($occasion, 'Mum'));
+    $gift->forceFill(['status' => GiftStatus::Given, 'purchased_by_user_id' => $user->id])->save();
+
+    giftsPage($user, $occasion)->assertDontSeeHtml('data-test="advance-gift-button"');
+});
+
+it('refuses to advance another household\'s gift from the page', function () {
+    $user = User::factory()->create();
+    $occasion = christmasFor($user);
+    $other = User::factory()->create();
+    $otherOccasion = christmasFor($other);
+    $gift = giftFor($other, $otherOccasion, personFor($otherOccasion, 'Dad'));
+
+    giftsPage($user, $occasion)->call('advanceGift', $gift->id, 'idea')->assertNotFound();
+
+    expect($gift->refresh()->status)->toBe(GiftStatus::Idea);
+});
+
+it('does not skip a step when the gift was already advanced in another window', function () {
+    $user = User::factory()->create();
+    $occasion = christmasFor($user);
+    $gift = giftFor($user, $occasion, personFor($occasion, 'Mum'));
+
+    $page = giftsPage($user, $occasion);
+    $page->call('advanceGift', $gift->id, 'idea')->call('advanceGift', $gift->id, 'idea');
+
+    expect($gift->refresh()->status)->toBe(GiftStatus::Bought);
+});
+
+it('adds a gift that is already bought, with its buyer', function () {
+    $user = User::factory()->create();
+    $occasion = christmasFor($user);
+    $mum = personFor($occasion, 'Mum');
+
+    giftsPage($user, $occasion)
+        ->call('addGift', $mum->id)
+        ->set('giftForm.title', 'Scarf')
+        ->set('giftForm.status', 'bought')
+        ->set('giftForm.buyerId', (string) $user->id)
+        ->call('saveGift')
+        ->assertHasNoErrors();
+
+    $gift = Gift::firstWhere('title', 'Scarf');
+    expect($gift->status)->toBe(GiftStatus::Bought)->and($gift->purchased_by_user_id)->toBe($user->id);
+});
+
+it('sets a gift back to Idea from the edit window and clears its buyer', function () {
+    $user = User::factory()->create();
+    $occasion = christmasFor($user);
+    $gift = giftFor($user, $occasion, personFor($occasion, 'Mum'), ['status' => GiftStatus::Bought, 'purchased_by_user_id' => $user->id]);
+
+    giftsPage($user, $occasion)
+        ->call('editGift', $gift->id)
+        ->set('giftForm.status', 'idea')
+        ->set('giftForm.buyerId', '')
+        ->call('saveGift')
+        ->assertHasNoErrors();
+
+    expect($gift->fresh())->status->toBe(GiftStatus::Idea)->purchased_by_user_id->toBeNull();
+});
+
+it('changes who bought a gift from the edit window', function () {
+    $user = User::factory()->create();
+    $partner = User::factory()->create(['household_id' => $user->household_id]);
+    $occasion = christmasFor($user);
+    $gift = giftFor($user, $occasion, personFor($occasion, 'Mum'), ['status' => GiftStatus::Bought, 'purchased_by_user_id' => $user->id]);
+
+    giftsPage($user, $occasion)
+        ->call('editGift', $gift->id)
+        ->set('giftForm.buyerId', (string) $partner->id)
+        ->call('saveGift')
+        ->assertHasNoErrors();
+
+    expect($gift->fresh()->purchased_by_user_id)->toBe($partner->id);
+});
+
+it('offers both household members as buyers in the gift window', function () {
+    $user = User::factory()->create(['name' => 'Jason']);
+    $partner = User::factory()->create(['name' => 'Sam', 'household_id' => $user->household_id]);
+    $occasion = christmasFor($user);
+    personFor($occasion, 'Mum');
+
+    giftsPage($user, $occasion)
+        ->assertSeeHtml('value="'.$user->id.'"')
+        ->assertSeeHtml('value="'.$partner->id.'"')
+        ->assertSeeHtml('value="bought"')
+        ->assertSee(['Jason', 'Sam']);
 });

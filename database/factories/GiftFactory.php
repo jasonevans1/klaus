@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Enums\GiftStatus;
 use App\Models\Gift;
 use App\Models\Household;
 use App\Models\Occasion;
 use App\Models\Recipient;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -43,5 +45,25 @@ class GiftFactory extends Factory
             'recipient_id' => $recipient->id,
             'occasion_id' => $occasion->id,
         ]);
+    }
+
+    public function bought(User $buyer): static
+    {
+        return $this->purchased(GiftStatus::Bought, $buyer);
+    }
+
+    public function wrapped(User $buyer): static
+    {
+        return $this->purchased(GiftStatus::Wrapped, $buyer);
+    }
+
+    public function given(User $buyer): static
+    {
+        return $this->purchased(GiftStatus::Given, $buyer);
+    }
+
+    private function purchased(GiftStatus $status, User $buyer): static
+    {
+        return $this->state(['status' => $status, 'purchased_by_user_id' => $buyer->id]);
     }
 }

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\GiftStatus;
 use App\Models\Gift;
 use App\Models\Occasion;
 use App\Models\Recipient;
@@ -74,4 +75,41 @@ it('makes several factory gifts for a person who is already on the occasion', fu
 
     expect($occasion->gifts()->count())->toBe(3)
         ->and($occasion->recipients()->count())->toBe(1);
+});
+
+it('starts a new gift at Idea with no buyer', function () {
+    expect((new Gift)->status)->toBe(GiftStatus::Idea);
+
+    $gift = Gift::factory()->create()->fresh();
+
+    expect($gift->status)->toBe(GiftStatus::Idea)
+        ->and($gift->purchased_by_user_id)->toBeNull()
+        ->and($gift->purchasedBy)->toBeNull();
+});
+
+it("reads a gift's status as a GiftStatus", function () {
+    $buyer = User::factory()->create();
+
+    expect(Gift::factory()->bought($buyer)->create()->fresh()->status)->toBe(GiftStatus::Bought)
+        ->and(Gift::factory()->wrapped($buyer)->create()->fresh()->status)->toBe(GiftStatus::Wrapped)
+        ->and(Gift::factory()->given($buyer)->create()->fresh()->status)->toBe(GiftStatus::Given);
+});
+
+it('knows which household member bought a gift', function () {
+    $buyer = User::factory()->create();
+    $gift = Gift::factory()->bought($buyer)->create()->fresh();
+
+    expect($gift->purchased_by_user_id)->toBe($buyer->id)
+        ->and($gift->purchasedBy->is($buyer))->toBeTrue();
+});
+
+it("keeps the gift but forgets the buyer when the buyer's account is deleted", function () {
+    $buyer = User::factory()->create();
+    $gift = Gift::factory()->bought($buyer)->create();
+
+    $buyer->delete();
+    $gift = $gift->fresh();
+
+    expect($gift)->not->toBeNull()
+        ->and($gift->purchased_by_user_id)->toBeNull();
 });

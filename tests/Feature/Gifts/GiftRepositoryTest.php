@@ -61,3 +61,29 @@ it('lists no gifts for another household\'s occasion', function () {
 
     expect(gifts()->byPerson($user, $theirs))->toBe([]);
 });
+
+it('loads who bought each gift along with the occasion\'s gifts', function () {
+    $user = User::factory()->create();
+    $occasion = Occasion::factory()->forHousehold($user->household)->create();
+    $ann = Recipient::factory()->create(['household_id' => $user->household_id]);
+    Gift::factory()->forPersonOn($ann, $occasion)->bought($user)->create();
+
+    $gift = gifts()->byPerson($user, $occasion)[$ann->id]->first();
+
+    expect($gift->relationLoaded('purchasedBy'))->toBeTrue()
+        ->and($gift->purchasedBy->is($user))->toBeTrue();
+});
+
+it('lists both household members as possible buyers', function () {
+    $me = User::factory()->create(['name' => 'Zed']);
+    $partner = User::factory()->create(['name' => 'Amy', 'household_id' => $me->household_id]);
+
+    expect(gifts()->buyers($me)->pluck('id')->all())->toBe([$partner->id, $me->id]);
+});
+
+it('does not offer another household\'s members as buyers', function () {
+    $me = User::factory()->create();
+    User::factory()->create();
+
+    expect(gifts()->buyers($me)->pluck('id')->all())->toBe([$me->id]);
+});

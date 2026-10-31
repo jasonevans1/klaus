@@ -24,7 +24,7 @@ it('lists only my people who are not on the occasion yet', function () {
 
     Livewire::actingAs($user)->test('pages::occasions.show', ['occasion' => $occasion->id])->call('openAddPeople')
         ->assertSeeInOrder(['Anna', 'Bob'])
-        ->assertDontSeeHtml('value="'.Recipient::where('name', 'Mum')->value('id').'"')
+        ->assertDontSeeHtml('data-available="Mum"')
         ->assertDontSee('Stranger');
 });
 
