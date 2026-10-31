@@ -230,3 +230,26 @@ expect()->extend('toShowIdeasLeft', function (int $count, string $total) {
 
     return $this;
 });
+
+/**
+ * The wrapping checklist shows exactly these gifts, each [who it is for, title, "wrapped" or "to wrap"], in the order shown.
+ */
+expect()->extend('toListGiftsToWrap', function (array $gifts) {
+    expect($this->value)->toBeInstanceOf(SeenWrappingChecklist::class)
+        ->and($this->value->gifts)->toBe($gifts);
+
+    return $this;
+});
+
+/**
+ * The wrapping checklist's header reads e.g. "1 of 4 wrapped"; with nothing bought it reads "0 of 0 wrapped" and says "Nothing to wrap yet."
+ */
+expect()->extend('toShowWrapped', function (int $wrapped, int $of) {
+    expect($this->value)->toBeInstanceOf(SeenWrappingChecklist::class)
+        ->and($this->value->wrappedCount)->toBe((string) $wrapped)
+        ->and($this->value->total)->toBe((string) $of)
+        ->and($this->value->header)->toContain("{$wrapped} of {$of} wrapped")
+        ->and($this->value->saysNothingToWrap)->toBe($of === 0);
+
+    return $this;
+});

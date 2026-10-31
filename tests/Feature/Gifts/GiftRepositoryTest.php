@@ -144,3 +144,58 @@ it('orders ideas by person name and then the order they were added', function ()
     expect($ideas->pluck('id')->all())->toBe([$second->id, $first->id, $third->id])
         ->and($ideas->first()->relationLoaded('recipient'))->toBeTrue();
 });
+
+it('lists the gifts that are bought or wrapped on the occasion', function () {
+    $user = User::factory()->create();
+    $occasion = Occasion::factory()->forHousehold($user->household)->create();
+    $ann = Recipient::factory()->create(['household_id' => $user->household_id]);
+    $bought = Gift::factory()->forPersonOn($ann, $occasion)->bought($user)->create();
+    $wrapped = Gift::factory()->forPersonOn($ann, $occasion)->wrapped($user)->create();
+
+    expect(gifts()->toWrap($user, $occasion)->pluck('id')->all())->toEqualCanonicalizing([$bought->id, $wrapped->id]);
+});
+
+it('leaves out ideas and given gifts from the wrapping list', function () {
+    $user = User::factory()->create();
+    $occasion = Occasion::factory()->forHousehold($user->household)->create();
+    $ann = Recipient::factory()->create(['household_id' => $user->household_id]);
+    $bought = Gift::factory()->forPersonOn($ann, $occasion)->bought($user)->create();
+    Gift::factory()->forPersonOn($ann, $occasion)->create();
+    Gift::factory()->forPersonOn($ann, $occasion)->given($user)->create();
+
+    expect(gifts()->toWrap($user, $occasion)->pluck('id')->all())->toBe([$bought->id]);
+});
+
+it('leaves out gifts to wrap from other occasions', function () {
+    $user = User::factory()->create();
+    $occasion = Occasion::factory()->forHousehold($user->household)->create();
+    $elsewhere = Occasion::factory()->forHousehold($user->household)->create();
+    $ann = Recipient::factory()->create(['household_id' => $user->household_id]);
+    $here = Gift::factory()->forPersonOn($ann, $occasion)->bought($user)->create();
+    Gift::factory()->forPersonOn($ann, $elsewhere)->bought($user)->create();
+
+    expect(gifts()->toWrap($user, $occasion)->pluck('id')->all())->toBe([$here->id]);
+});
+
+it('lists nothing to wrap for another household\'s occasion', function () {
+    $user = User::factory()->create();
+    Gift::factory()->bought(User::factory()->create())->create();
+    $theirs = Gift::query()->firstOrFail()->occasion;
+
+    expect(gifts()->toWrap($user, $theirs))->toBeEmpty();
+});
+
+it('orders gifts to wrap by person name and then the order they were added', function () {
+    $user = User::factory()->create();
+    $occasion = Occasion::factory()->forHousehold($user->household)->create();
+    $zed = Recipient::factory()->create(['household_id' => $user->household_id, 'name' => 'zed']);
+    $ann = Recipient::factory()->create(['household_id' => $user->household_id, 'name' => 'Ann']);
+    $first = Gift::factory()->forPersonOn($zed, $occasion)->bought($user)->create();
+    $second = Gift::factory()->forPersonOn($ann, $occasion)->wrapped($user)->create();
+    $third = Gift::factory()->forPersonOn($zed, $occasion)->bought($user)->create();
+
+    $gifts = gifts()->toWrap($user, $occasion);
+
+    expect($gifts->pluck('id')->all())->toBe([$second->id, $first->id, $third->id])
+        ->and($gifts->first()->relationLoaded('recipient'))->toBeTrue();
+});
