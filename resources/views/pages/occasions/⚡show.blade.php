@@ -1,12 +1,18 @@
 <?php
 
+use App\Actions\Gifts\AddGift;
+use App\Actions\Gifts\DeleteGift;
+use App\Actions\Gifts\UpdateGift;
 use App\Actions\Occasions\AddPeopleToOccasion;
 use App\Actions\Occasions\RemovePersonFromOccasion;
 use App\Actions\Occasions\SetBudget;
 use App\Enums\RecipientGroup;
+use App\Livewire\Forms\GiftForm;
 use App\Models\Occasion;
+use App\Repositories\GiftRepository;
 use App\Repositories\OccasionRepository;
 use App\Support\Budget;
+use App\Support\Price;
 use Flux\Flux;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -42,7 +48,7 @@ new class extends Component
     {
         app(RemovePersonFromOccasion::class)->handle(Auth::user(), $this->occasionId, $recipientId);
 
-        unset($this->groups, $this->totalBudgetCents);
+        unset($this->groups, $this->totalBudgetCents, $this->giftsByPerson);
         $this->fillBudgets();
     }
 
@@ -86,6 +92,62 @@ new class extends Component
         Flux::toast(variant: 'success', text: __('Added :count :people.', ['count' => $count, 'people' => Str::plural('person', $count)]));
     }
 
+    public GiftForm $giftForm;
+
+    public function addGift(int $recipientId): void
+    {
+        $this->giftForm->reset();
+        $this->resetValidation();
+        $this->giftForm->recipientId = $recipientId;
+        Flux::modal('gift')->show();
+    }
+
+    public function editGift(int $giftId): void
+    {
+        $this->giftForm->reset();
+        $this->resetValidation();
+        $this->giftForm->fillFrom(app(GiftRepository::class)->findForUser(Auth::user(), $giftId));
+        Flux::modal('gift')->show();
+    }
+
+    public function deleteGift(int $giftId): void
+    {
+        app(DeleteGift::class)->handle(Auth::user(), $giftId);
+
+        unset($this->giftsByPerson);
+        Flux::toast(variant: 'success', text: __('Gift deleted.'));
+    }
+
+    public function saveGift(): void
+    {
+        $this->persistGift();
+        Flux::modal('gift')->close();
+    }
+
+    public function saveGiftAndAddAnother(): void
+    {
+        $this->persistGift();
+        $this->giftForm->resetForNext();
+    }
+
+    private function persistGift(): void
+    {
+        $this->giftForm->validate();
+
+        $gift = $this->giftForm->giftId
+            ? app(UpdateGift::class)->handle(Auth::user(), $this->giftForm->giftId, $this->giftForm->data())
+            : app(AddGift::class)->handle(Auth::user(), $this->occasionId, (int) $this->giftForm->recipientId, $this->giftForm->data());
+
+        unset($this->giftsByPerson);
+        Flux::toast(variant: 'success', text: __('Saved :title.', ['title' => $gift->title]));
+    }
+
+    #[Computed]
+    public function giftsByPerson(): array
+    {
+        return app(GiftRepository::class)->byPerson(Auth::user(), $this->occasion);
+    }
+
     #[Computed]
     public function availablePeople(): Collection
     {
@@ -108,6 +170,13 @@ new class extends Component
     public function totalBudgetCents(): int
     {
         return app(OccasionRepository::class)->totalBudgetCents($this->occasion);
+    }
+
+    public function removeWarning(string $name, int $giftCount): string
+    {
+        return $giftCount === 0
+            ? __('Remove :name from this occasion?', ['name' => $name])
+            : __('Remove :name and their :count :gifts from this occasion?', ['name' => $name, 'count' => $giftCount, 'gifts' => Str::plural('gift', $giftCount)]);
     }
 
     private function fillBudgets(): void
@@ -138,7 +207,8 @@ new class extends Component
             <flux:heading>{{ $label }} ({{ $people->count() }})</flux:heading>
 
             @foreach ($people as $person)
-                <div wire:key="person-{{ $person->id }}" data-person="{{ $person->name }}"
+                <div wire:key="person-{{ $person->id }}">
+                <div data-person="{{ $person->name }}"
                     @if ($person->is_shared) data-shared @endif
                     @if ($person->archived_at) data-archived @endif
                     data-budget="{{ Budget::format($person->pivot->budget_cents) }}"
@@ -161,8 +231,28 @@ new class extends Component
                             </flux:input.group>
                             <flux:error name="budgets.{{ $person->id }}" />
                         </div>
-                        <flux:button size="sm" wire:click="remove({{ $person->id }})" wire:confirm="{{ __('Remove :name from this occasion?', ['name' => $person->name]) }}" data-test="remove-person-button">{{ __('Remove') }}</flux:button>
+                        <flux:button size="sm" wire:click="remove({{ $person->id }})" wire:confirm="{{ $this->removeWarning($person->name, count($this->giftsByPerson[$person->id] ?? [])) }}" data-test="remove-person-button">{{ __('Remove') }}</flux:button>
                     </div>
+                </div>
+
+                <div class="space-y-1 pl-4 pt-2">
+                    @foreach ($this->giftsByPerson[$person->id] ?? [] as $gift)
+                        <div wire:key="gift-{{ $gift->id }}" data-gift="{{ $gift->title }}" data-price="{{ Price::format($gift->price_cents) }}" data-store="{{ $gift->store }}" data-url="{{ $gift->url }}" class="flex items-center gap-4">
+                            @if ($gift->url)
+                                <a href="{{ $gift->url }}" target="_blank" rel="noopener noreferrer" class="underline">{{ $gift->title }}</a>
+                            @else
+                                <flux:text variant="strong">{{ $gift->title }}</flux:text>
+                            @endif
+                            <flux:text size="sm">{{ Price::format($gift->price_cents) }}</flux:text>
+                            @if ($gift->store)
+                                <flux:text size="sm">{{ $gift->store }}</flux:text>
+                            @endif
+                            <flux:button size="xs" wire:click="editGift({{ $gift->id }})" data-test="edit-gift-button">{{ __('Edit') }}</flux:button>
+                            <flux:button size="xs" wire:click="deleteGift({{ $gift->id }})" wire:confirm="{{ __('Delete :title?', ['title' => $gift->title]) }}" data-test="delete-gift-button">{{ __('Delete') }}</flux:button>
+                        </div>
+                    @endforeach
+                    <flux:button size="sm" wire:click="addGift({{ $person->id }})" data-test="add-gift-button">{{ __('Add gift') }}</flux:button>
+                </div>
                 </div>
             @endforeach
         </div>
@@ -193,5 +283,32 @@ new class extends Component
                 </div>
             @endif
         </div>
+    </flux:modal>
+
+    <flux:modal name="gift" class="w-full max-w-lg">
+        <form wire:submit="saveGift" class="space-y-4">
+            <flux:heading size="lg">{{ $giftForm->giftId ? __('Edit gift') : __('Add gift for :name', ['name' => collect($this->groups)->flatten()->firstWhere('id', $giftForm->recipientId)?->name]) }}</flux:heading>
+
+            <flux:input wire:model="giftForm.title" :label="__('Title')" />
+
+            <flux:field>
+                <flux:label>{{ __('Price') }}</flux:label>
+                <flux:input.group>
+                    <flux:input.group.prefix>$</flux:input.group.prefix>
+                    <flux:input wire:model="giftForm.price" inputmode="decimal" />
+                </flux:input.group>
+                <flux:error name="giftForm.price" />
+            </flux:field>
+
+            <flux:input wire:model="giftForm.store" :label="__('Store')" />
+            <flux:input wire:model="giftForm.url" :label="__('Link')" />
+
+            <div class="flex justify-end gap-2">
+                @unless ($giftForm->giftId)
+                    <flux:button wire:click="saveGiftAndAddAnother" data-test="save-gift-and-add-another-button">{{ __('Save and add another') }}</flux:button>
+                @endunless
+                <flux:button type="submit" variant="primary" data-test="save-gift-button">{{ __('Save') }}</flux:button>
+            </div>
+        </form>
     </flux:modal>
 </section>

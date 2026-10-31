@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Actions\Occasions\AddPeopleToOccasion;
 use App\Actions\Occasions\RemovePersonFromOccasion;
 use App\Actions\Occasions\SetBudget;
+use App\Models\Gift;
 use App\Models\Occasion;
 use App\Models\Recipient;
 use App\Models\User;
@@ -126,3 +127,37 @@ it('refuses to set a budget for someone not on the occasion', function () {
 
     app(SetBudget::class)->handle($user, $occasion->id, $person->id, 100);
 })->throws(ModelNotFoundException::class);
+
+it('deletes the person\'s gifts on the occasion when they are removed from it', function () {
+    [$user, $occasion] = rosterSetup();
+    $person = Recipient::factory()->forHousehold($user->household)->create();
+    Gift::factory()->forPersonOn($person, $occasion)->create();
+
+    app(RemovePersonFromOccasion::class)->handle($user, $occasion->id, $person->id);
+
+    expect(Gift::count())->toBe(0);
+});
+
+it('keeps the person\'s gifts on other occasions when they are removed from one', function () {
+    [$user, $occasion] = rosterSetup();
+    $other = Occasion::factory()->forHousehold($user->household)->create();
+    $person = Recipient::factory()->forHousehold($user->household)->create();
+    Gift::factory()->forPersonOn($person, $occasion)->create();
+    Gift::factory()->forPersonOn($person, $other)->create();
+
+    app(RemovePersonFromOccasion::class)->handle($user, $occasion->id, $person->id);
+
+    expect(Gift::where('occasion_id', $other->id)->count())->toBe(1);
+});
+
+it('keeps other people\'s gifts on the occasion when one person is removed', function () {
+    [$user, $occasion] = rosterSetup();
+    $person = Recipient::factory()->forHousehold($user->household)->create();
+    $friend = Recipient::factory()->forHousehold($user->household)->create();
+    Gift::factory()->forPersonOn($person, $occasion)->create();
+    Gift::factory()->forPersonOn($friend, $occasion)->create();
+
+    app(RemovePersonFromOccasion::class)->handle($user, $occasion->id, $person->id);
+
+    expect(Gift::where('recipient_id', $friend->id)->count())->toBe(1);
+});

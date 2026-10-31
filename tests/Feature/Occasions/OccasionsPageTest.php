@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Models\Gift;
 use App\Models\Occasion;
+use App\Models\Recipient;
 use App\Models\User;
 use Livewire\Livewire;
 
@@ -66,4 +68,20 @@ it('returns not found for a non-numeric occasion url', function () {
 
 it('shows the occasions link in the sidebar', function () {
     $this->actingAs(User::factory()->create())->get(route('dashboard'))->assertSee(route('occasions.index'));
+});
+
+it('says how many gifts will be deleted when confirming an occasion delete', function () {
+    $user = User::factory()->create();
+    $occasion = Occasion::factory()->forHousehold($user->household)->christmas(2026)->create();
+    $person = Recipient::factory()->forHousehold($user->household)->create();
+    Gift::factory()->count(3)->forPersonOn($person, $occasion)->create();
+
+    occasionsPage($user)->assertSeeHtml('Delete Christmas 2026 and its 3 gifts?');
+});
+
+it('keeps the plain delete confirmation for an occasion with no gifts', function () {
+    $user = User::factory()->create();
+    Occasion::factory()->forHousehold($user->household)->christmas(2026)->create();
+
+    occasionsPage($user)->assertSeeHtml('Delete Christmas 2026?');
 });
