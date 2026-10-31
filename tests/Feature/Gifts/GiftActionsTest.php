@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Actions\Gifts\AddGift;
 use App\Actions\Gifts\AdvanceGiftStatus;
 use App\Actions\Gifts\DeleteGift;
+use App\Actions\Gifts\SetGiftWrapped;
 use App\Actions\Gifts\UpdateGift;
 use App\Enums\GiftStatus;
 use App\Models\Gift;
@@ -193,4 +194,70 @@ it('refuses a buyer from another household', function () {
     expect(fn () => app(AddGift::class)->handle($user, $occasion->id, $person->id, giftData(['status' => GiftStatus::Bought, 'purchased_by_user_id' => $stranger->id])))
         ->toThrow(ModelNotFoundException::class);
     expect(Gift::count())->toBe(0);
+});
+
+it('marks a bought gift as wrapped', function () {
+    [$user, $occasion, $person] = giftSetup();
+    $gift = Gift::factory()->forPersonOn($person, $occasion)->bought($user)->create();
+
+    app(SetGiftWrapped::class)->handle($user, $gift->id, true);
+
+    expect($gift->refresh()->status)->toBe(GiftStatus::Wrapped);
+});
+
+it('puts a wrapped gift back to bought', function () {
+    [$user, $occasion, $person] = giftSetup();
+    $gift = Gift::factory()->forPersonOn($person, $occasion)->wrapped($user)->create();
+
+    app(SetGiftWrapped::class)->handle($user, $gift->id, false);
+
+    expect($gift->refresh()->status)->toBe(GiftStatus::Bought);
+});
+
+it('keeps who bought the gift when it is wrapped or unwrapped', function () {
+    [$user, $occasion, $person] = giftSetup();
+    $partner = User::factory()->create(['household_id' => $user->household_id]);
+    $gift = Gift::factory()->forPersonOn($person, $occasion)->bought($partner)->create();
+
+    app(SetGiftWrapped::class)->handle($user, $gift->id, true);
+    expect($gift->refresh()->purchased_by_user_id)->toBe($partner->id);
+
+    app(SetGiftWrapped::class)->handle($user, $gift->id, false);
+    expect($gift->refresh()->purchased_by_user_id)->toBe($partner->id);
+});
+
+it('leaves a gift that is already in the asked-for state alone', function () {
+    [$user, $occasion, $person] = giftSetup();
+    $bought = Gift::factory()->forPersonOn($person, $occasion)->bought($user)->create();
+    $wrapped = Gift::factory()->forPersonOn($person, $occasion)->wrapped($user)->create();
+
+    app(SetGiftWrapped::class)->handle($user, $bought->id, false);
+    app(SetGiftWrapped::class)->handle($user, $wrapped->id, true);
+
+    expect($bought->refresh()->status)->toBe(GiftStatus::Bought)
+        ->and($wrapped->refresh()->status)->toBe(GiftStatus::Wrapped);
+});
+
+it('never moves an idea or a given gift from the wrapping checklist', function () {
+    [$user, $occasion, $person] = giftSetup();
+    $idea = Gift::factory()->forPersonOn($person, $occasion)->create();
+    $given = Gift::factory()->forPersonOn($person, $occasion)->given($user)->create();
+
+    foreach ([true, false] as $wrapped) {
+        app(SetGiftWrapped::class)->handle($user, $idea->id, $wrapped);
+        app(SetGiftWrapped::class)->handle($user, $given->id, $wrapped);
+    }
+
+    expect($idea->refresh()->status)->toBe(GiftStatus::Idea)
+        ->and($idea->purchased_by_user_id)->toBeNull()
+        ->and($given->refresh()->status)->toBe(GiftStatus::Given);
+});
+
+it("refuses to wrap another household's gift", function () {
+    [$user] = giftSetup();
+    $gift = Gift::factory()->bought(User::factory()->create())->create();
+
+    expect(fn () => app(SetGiftWrapped::class)->handle($user, $gift->id, true))
+        ->toThrow(ModelNotFoundException::class);
+    expect($gift->fresh()->status)->toBe(GiftStatus::Bought);
 });

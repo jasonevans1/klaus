@@ -380,6 +380,33 @@ final class Member
         return new OpenShoppingList($this, $page);
     }
 
+    /**
+     * What the occasion's wrapping checklist shows me: every bought or wrapped gift, for everyone, and how many are wrapped.
+     */
+    public function wrappingChecklist(string $occasion): SeenWrappingChecklist
+    {
+        $html = Livewire::actingAs($this->user)
+            ->test('pages::occasions.wrapping', ['occasion' => $this->occasionId($occasion)])
+            ->html();
+
+        auth()->logout();
+
+        return SeenWrappingChecklist::read($html);
+    }
+
+    /**
+     * Open the occasion's wrapping checklist and leave it open, so I can tick gifts off as I wrap them.
+     */
+    public function opensWrappingChecklist(string $occasion): OpenWrappingChecklist
+    {
+        $page = Livewire::actingAs($this->user)
+            ->test('pages::occasions.wrapping', ['occasion' => $this->occasionId($occasion)]);
+
+        auth()->logout();
+
+        return new OpenWrappingChecklist($this, $page);
+    }
+
     public function giftId(string $for, string $title): int
     {
         return Gift::where('household_id', $this->user->household_id)
@@ -1085,5 +1112,126 @@ final class OpenShoppingList
     public function shows(): SeenShoppingList
     {
         return SeenShoppingList::read($this->page->html());
+    }
+}
+
+/**
+ * A wrapping checklist as I see it: each gift as [who it is for, title, "wrapped" or "to wrap"], in the order shown,
+ * plus the header's counts and text, and whether it says there is nothing to wrap yet.
+ */
+final class SeenWrappingChecklist
+{
+    /**
+     * @param  list<array{string, string, string}>  $gifts
+     */
+    public function __construct(
+        public readonly array $gifts,
+        public readonly string $wrappedCount,
+        public readonly string $total,
+        public readonly string $header,
+        public readonly bool $saysNothingToWrap,
+    ) {}
+
+    public static function read(string $html): self
+    {
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+        $xpath = new DOMXPath($dom);
+
+        $gifts = [];
+        foreach ($xpath->query('//*[@data-wrap]') as $row) {
+            $wrapped = $row->getAttribute('data-wrapped');
+            $gifts[] = [
+                $row->getAttribute('data-for'),
+                $row->getAttribute('data-wrap'),
+                match ($wrapped) {
+                    'yes' => 'wrapped',
+                    'no' => 'to wrap',
+                    default => $wrapped,
+                },
+            ];
+        }
+
+        $wrappedCount = $xpath->query('//*[@data-wrapped-count]')->item(0);
+        $total = $xpath->query('//*[@data-to-wrap-count]')->item(0);
+        expect($wrappedCount)->not->toBeNull('The wrapping checklist shows no count of wrapped gifts')
+            ->and($total)->not->toBeNull('The wrapping checklist shows no count of gifts to wrap');
+
+        return new self(
+            $gifts,
+            $wrappedCount->getAttribute('data-wrapped-count'),
+            $total->getAttribute('data-to-wrap-count'),
+            trim((string) preg_replace('/\s+/', ' ', $wrappedCount->textContent)),
+            str_contains((string) preg_replace('/\s+/', ' ', $dom->textContent), 'Nothing to wrap yet.'),
+        );
+    }
+}
+
+/**
+ * A wrapping checklist I opened earlier and left open; what I click on it is sent from the list as I last saw it.
+ */
+final class OpenWrappingChecklist
+{
+    public function __construct(
+        public readonly Member $member,
+        public readonly Testable $page,
+    ) {
+        // The list as it was when opened, for rows that later disappear from the page.
+        $this->openedHtml = $page->html();
+    }
+
+    private string $openedHtml;
+
+    /**
+     * Tick the person's gift that this list shows unticked, $times clicks in a row (all sent from the list as it was).
+     */
+    public function ticks(string $for, string $title, int $times = 1): void
+    {
+        $this->click($for, $title, 'no', $times);
+    }
+
+    /**
+     * Untick the person's gift that this list shows ticked (puts it back to bought).
+     */
+    public function unticks(string $for, string $title): void
+    {
+        $this->click($for, $title, 'yes', 1);
+    }
+
+    private function click(string $for, string $title, string $wrapped, int $times): void
+    {
+        // The row as the page shows it now; a row that has since gone from the page is still on the list as it was opened.
+        $xpath = $row = null;
+        foreach ([$this->page->html(), $this->openedHtml] as $html) {
+            $dom = new DOMDocument;
+            @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+            $xpath = new DOMXPath($dom);
+            $row = $xpath->query('//*[@data-for="'.$for.'"][@data-wrap="'.$title.'"]')->item(0);
+            if ($row !== null) {
+                break;
+            }
+        }
+        expect($row)->not->toBeNull("{$title} for {$for} is not on the list");
+        expect($row->getAttribute('data-wrapped'))->toBe($wrapped);
+        $checkbox = $xpath->query('.//*[@data-test="wrap-checkbox"]', $row)->item(0);
+        expect($checkbox)->not->toBeNull("{$title} has no checkbox on the list");
+
+        expect(preg_match('/^(\w+)\((.*)\)$/', $checkbox->getAttribute('wire:click'), $call))->toBe(1);
+        $params = json_decode('['.str_replace("'", '"', $call[2]).']', true);
+
+        Livewire::actingAs($this->member->user);
+        for ($i = 0; $i < $times; $i++) {
+            $this->page->call($call[1], ...$params);
+        }
+
+        auth()->logout();
+    }
+
+    /**
+     * What this list shows me now, without reloading it.
+     */
+    public function shows(): SeenWrappingChecklist
+    {
+        return SeenWrappingChecklist::read($this->page->html());
     }
 }

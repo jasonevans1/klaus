@@ -38,11 +38,28 @@ class GiftRepository
      */
     public function ideas(User $user, Occasion $occasion): Collection
     {
+        return $this->withStatuses($user, $occasion, [GiftStatus::Idea]);
+    }
+
+    /**
+     * @return Collection<int, Gift>
+     */
+    public function toWrap(User $user, Occasion $occasion): Collection
+    {
+        return $this->withStatuses($user, $occasion, [GiftStatus::Bought, GiftStatus::Wrapped]);
+    }
+
+    /**
+     * @param  array<int, GiftStatus>  $statuses
+     * @return Collection<int, Gift>
+     */
+    private function withStatuses(User $user, Occasion $occasion, array $statuses): Collection
+    {
         // ponytail: private-gift filtering (feature 10) goes in here too.
         return Gift::query()
             ->where('household_id', $user->household_id)
             ->where('occasion_id', $occasion->id)
-            ->where('status', GiftStatus::Idea)
+            ->whereIn('status', $statuses)
             ->with('recipient')
             ->orderBy('id')
             ->get()

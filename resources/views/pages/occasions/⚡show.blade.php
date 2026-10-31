@@ -230,6 +230,7 @@ new class extends Component
         </div>
         <div class="flex items-center gap-2">
             <flux:button :href="route('occasions.shopping', $this->occasion)" wire:navigate data-test="shopping-list-link">{{ __('Shopping list') }}</flux:button>
+            <flux:button :href="route('occasions.wrapping', $this->occasion)" wire:navigate data-test="wrapping-checklist-link">{{ __('Wrapping checklist') }}</flux:button>
             <flux:button variant="primary" wire:click="openAddPeople" data-test="add-people-button">{{ __('Add people') }}</flux:button>
         </div>
     </div>
