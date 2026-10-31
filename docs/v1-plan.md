@@ -86,7 +86,7 @@ Each feature is one HCF plan, small enough to build, test and deploy on its own.
   - Done when: the overview replaces the spreadsheet for Christmas 2026.
 - [x] **8. Shopping list** — Every gift still at Idea on the occasion, across all people.
   - Done when: I can shop from one screen.
-- [ ] **9. Wrapping checklist** — Every gift at Bought, checked off as Wrapped.
+- [x] **9. Wrapping checklist** — Every gift at Bought, checked off as Wrapped.
   - Done when: wrapping night is one list.
 - [ ] **10. Private gifts** — Private flag on a gift; hidden from my partner and excluded from shared totals; a "My private gifts" line for the owner.
   - Done when: my partner's view shows nothing about gifts I'm buying for them.
