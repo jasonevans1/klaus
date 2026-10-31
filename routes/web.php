@@ -16,6 +16,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::livewire('people', 'pages::people.index')->name('people.index');
     Route::livewire('occasions', 'pages::occasions.index')->name('occasions.index');
     Route::livewire('occasions/{occasion}', 'pages::occasions.show')->whereNumber('occasion')->name('occasions.show');
+    Route::livewire('occasions/{occasion}/shopping', 'pages::occasions.shopping')->whereNumber('occasion')->name('occasions.shopping');
 });
 
 require __DIR__.'/settings.php';

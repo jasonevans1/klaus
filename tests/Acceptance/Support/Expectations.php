@@ -207,3 +207,26 @@ expect()->extend('toShowNoGiftYet', function (array $names) {
 
     return $this;
 });
+
+/**
+ * The shopping list shows exactly these gifts still to buy, each [who it is for, title, price, store, link], in the order shown.
+ */
+expect()->extend('toListIdeas', function (array $ideas) {
+    expect($this->value)->toBeInstanceOf(SeenShoppingList::class)
+        ->and($this->value->ideas)->toBe($ideas);
+
+    return $this;
+});
+
+/**
+ * The shopping list's header reads e.g. "3 ideas · $95"; with nothing left it reads "0 ideas · $0" and says "Nothing left to buy."
+ */
+expect()->extend('toShowIdeasLeft', function (int $count, string $total) {
+    expect($this->value)->toBeInstanceOf(SeenShoppingList::class)
+        ->and($this->value->count)->toBe((string) $count)
+        ->and($this->value->total)->toBe($total)
+        ->and($this->value->header)->toContain($count.' '.($count === 1 ? 'idea' : 'ideas').' · '.$total)
+        ->and($this->value->saysNothingLeft)->toBe($count === 0);
+
+    return $this;
+});

@@ -87,3 +87,60 @@ it('does not offer another household\'s members as buyers', function () {
 
     expect(gifts()->buyers($me)->pluck('id')->all())->toBe([$me->id]);
 });
+
+it('lists only the gifts still at idea on the occasion', function () {
+    $user = User::factory()->create();
+    $occasion = Occasion::factory()->forHousehold($user->household)->create();
+    $ann = Recipient::factory()->create(['household_id' => $user->household_id]);
+    $idea = Gift::factory()->forPersonOn($ann, $occasion)->create();
+    Gift::factory()->forPersonOn($ann, $occasion)->bought($user)->create();
+    Gift::factory()->forPersonOn($ann, $occasion)->wrapped($user)->create();
+    Gift::factory()->forPersonOn($ann, $occasion)->given($user)->create();
+
+    expect(gifts()->ideas($user, $occasion)->pluck('id')->all())->toBe([$idea->id]);
+});
+
+it('lists ideas for everyone on the occasion', function () {
+    $user = User::factory()->create();
+    $occasion = Occasion::factory()->forHousehold($user->household)->create();
+    $ann = Recipient::factory()->create(['household_id' => $user->household_id]);
+    $bob = Recipient::factory()->create(['household_id' => $user->household_id]);
+    $forAnn = Gift::factory()->forPersonOn($ann, $occasion)->create();
+    $forBob = Gift::factory()->forPersonOn($bob, $occasion)->create();
+
+    expect(gifts()->ideas($user, $occasion)->pluck('id')->all())->toEqualCanonicalizing([$forAnn->id, $forBob->id]);
+});
+
+it('leaves out ideas from other occasions', function () {
+    $user = User::factory()->create();
+    $occasion = Occasion::factory()->forHousehold($user->household)->create();
+    $elsewhere = Occasion::factory()->forHousehold($user->household)->create();
+    $ann = Recipient::factory()->create(['household_id' => $user->household_id]);
+    $here = Gift::factory()->forPersonOn($ann, $occasion)->create();
+    Gift::factory()->forPersonOn($ann, $elsewhere)->create();
+
+    expect(gifts()->ideas($user, $occasion)->pluck('id')->all())->toBe([$here->id]);
+});
+
+it('lists no ideas for another household\'s occasion', function () {
+    $user = User::factory()->create();
+    Gift::factory()->create();
+    $theirs = Gift::query()->firstOrFail()->occasion;
+
+    expect(gifts()->ideas($user, $theirs))->toBeEmpty();
+});
+
+it('orders ideas by person name and then the order they were added', function () {
+    $user = User::factory()->create();
+    $occasion = Occasion::factory()->forHousehold($user->household)->create();
+    $zed = Recipient::factory()->create(['household_id' => $user->household_id, 'name' => 'zed']);
+    $ann = Recipient::factory()->create(['household_id' => $user->household_id, 'name' => 'Ann']);
+    $first = Gift::factory()->forPersonOn($zed, $occasion)->create();
+    $second = Gift::factory()->forPersonOn($ann, $occasion)->create();
+    $third = Gift::factory()->forPersonOn($zed, $occasion)->create();
+
+    $ideas = gifts()->ideas($user, $occasion);
+
+    expect($ideas->pluck('id')->all())->toBe([$second->id, $first->id, $third->id])
+        ->and($ideas->first()->relationLoaded('recipient'))->toBeTrue();
+});
