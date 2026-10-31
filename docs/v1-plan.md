@@ -78,7 +78,7 @@ Each feature is one HCF plan, small enough to build, test and deploy on its own.
   - Done when: I can enter everyone from last year's spreadsheet.
 - [x] **4. Occasions and budgets** — Create a Christmas occasion, add people to it, set each person's budget.
   - Done when: Christmas 2026 lists everyone with a budget.
-- [ ] **5. Gifts on an occasion** — Add, edit and delete gifts per person: title, price, store, product link.
+- [x] **5. Gifts on an occasion** — Add, edit and delete gifts per person: title, price, store, product link.
   - Done when: Pluto's eight gifts are eight separate rows.
 - [ ] **6. Gift status and buyer** — Move a gift through Idea → Bought → Wrapped → Given; record who bought it.
   - Done when: one click advances a gift and shows who bought it.
