@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 function giftData(array $overrides = []): array
 {
-    return array_merge(['title' => 'Lego set', 'price_cents' => 4999, 'store' => 'Toys R Us', 'url' => 'https://example.com/lego', 'status' => GiftStatus::Idea, 'purchased_by_user_id' => null], $overrides);
+    return array_merge(['title' => 'Lego set', 'price_cents' => 4999, 'store' => 'Toys R Us', 'url' => 'https://example.com/lego', 'status' => GiftStatus::Idea, 'purchased_by_user_id' => null, 'is_private' => false], $overrides);
 }
 
 function giftSetup(): array
@@ -260,4 +260,35 @@ it("refuses to wrap another household's gift", function () {
     expect(fn () => app(SetGiftWrapped::class)->handle($user, $gift->id, true))
         ->toThrow(ModelNotFoundException::class);
     expect($gift->fresh()->status)->toBe(GiftStatus::Bought);
+});
+
+it('saves a new gift as private when asked', function () {
+    [$user, $occasion, $person] = giftSetup();
+
+    $private = app(AddGift::class)->handle($user, $occasion->id, $person->id, giftData(['is_private' => true]));
+    $public = app(AddGift::class)->handle($user, $occasion->id, $person->id, giftData());
+
+    expect($private->fresh()->is_private)->toBeTrue()
+        ->and($public->fresh()->is_private)->toBeFalse();
+});
+
+it('lets the person who added a gift make it private or public', function () {
+    [$user, $occasion, $person] = giftSetup();
+    $gift = Gift::factory()->forPersonOn($person, $occasion)->create(['created_by_user_id' => $user->id]);
+
+    app(UpdateGift::class)->handle($user, $gift->id, giftData(['is_private' => true]));
+    expect($gift->fresh()->is_private)->toBeTrue();
+
+    app(UpdateGift::class)->handle($user, $gift->id, giftData(['is_private' => false]));
+    expect($gift->fresh()->is_private)->toBeFalse();
+});
+
+it('ignores the private flag when someone else edits the gift', function () {
+    [$user, $occasion, $person] = giftSetup();
+    $partner = User::factory()->forHousehold($user->household)->create();
+    $gift = Gift::factory()->forPersonOn($person, $occasion)->create(['created_by_user_id' => $partner->id]);
+
+    app(UpdateGift::class)->handle($user, $gift->id, giftData(['is_private' => true]));
+
+    expect($gift->fresh()->is_private)->toBeFalse();
 });

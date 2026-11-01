@@ -15,7 +15,7 @@ class UpdateGift
     public function __construct(private readonly GiftRepository $gifts, private readonly ResolveBuyer $resolveBuyer) {}
 
     /**
-     * @param  array{title: string, price_cents: int|null, store: string|null, url: string|null, status: GiftStatus, purchased_by_user_id: int|null}  $data
+     * @param  array{title: string, price_cents: int|null, store: string|null, url: string|null, status: GiftStatus, purchased_by_user_id: int|null, is_private: bool}  $data
      */
     public function handle(User $user, int $giftId, array $data): Gift
     {
@@ -23,6 +23,9 @@ class UpdateGift
         $gift->fill(Arr::only($data, ['title', 'price_cents', 'store', 'url']));
         $gift->status = $data['status'];
         $gift->purchased_by_user_id = $this->resolveBuyer->handle($user, $data['status'], $data['purchased_by_user_id']);
+        if ($gift->created_by_user_id === $user->id) {
+            $gift->is_private = $data['is_private'];
+        }
         $gift->save();
 
         return $gift;

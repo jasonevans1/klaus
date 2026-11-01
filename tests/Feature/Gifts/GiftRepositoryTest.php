@@ -2,6 +2,11 @@
 
 declare(strict_types=1);
 
+use App\Actions\Gifts\AdvanceGiftStatus;
+use App\Actions\Gifts\DeleteGift;
+use App\Actions\Gifts\SetGiftWrapped;
+use App\Actions\Gifts\UpdateGift;
+use App\Enums\GiftStatus;
 use App\Models\Gift;
 use App\Models\Occasion;
 use App\Models\Recipient;
@@ -198,4 +203,71 @@ it('orders gifts to wrap by person name and then the order they were added', fun
 
     expect($gifts->pluck('id')->all())->toBe([$second->id, $first->id, $third->id])
         ->and($gifts->first()->relationLoaded('recipient'))->toBeTrue();
+});
+
+function privateGiftSetup(): array
+{
+    $me = User::factory()->create();
+    $partner = User::factory()->create(['household_id' => $me->household_id]);
+    $occasion = Occasion::factory()->forHousehold($me->household)->create();
+    $ann = Recipient::factory()->create(['household_id' => $me->household_id]);
+
+    return [$me, $partner, $occasion, $ann];
+}
+
+it('does not find my partner\'s private gift by id', function () {
+    [$me, $partner, $occasion, $ann] = privateGiftSetup();
+    $secret = Gift::factory()->forPersonOn($ann, $occasion)->private($me)->create();
+
+    gifts()->findForUser($partner, $secret->id);
+})->throws(ModelNotFoundException::class);
+
+it('finds my own private gift by id', function () {
+    [$me, , $occasion, $ann] = privateGiftSetup();
+    $secret = Gift::factory()->forPersonOn($ann, $occasion)->private($me)->create();
+
+    expect(gifts()->findForUser($me, $secret->id)->is($secret))->toBeTrue();
+});
+
+it('leaves my partner\'s private gifts out of the gifts on an occasion', function () {
+    [$me, $partner, $occasion, $ann] = privateGiftSetup();
+    $shared = Gift::factory()->forPersonOn($ann, $occasion)->create();
+    $secret = Gift::factory()->forPersonOn($ann, $occasion)->private($me)->create();
+
+    expect(gifts()->byPerson($partner, $occasion)[$ann->id]->pluck('id')->all())->toBe([$shared->id])
+        ->and(gifts()->byPerson($me, $occasion)[$ann->id]->pluck('id')->all())->toBe([$shared->id, $secret->id]);
+});
+
+it('leaves my partner\'s private gifts out of the shopping list ideas', function () {
+    [$me, $partner, $occasion, $ann] = privateGiftSetup();
+    $shared = Gift::factory()->forPersonOn($ann, $occasion)->create();
+    Gift::factory()->forPersonOn($ann, $occasion)->private($me)->create();
+
+    expect(gifts()->ideas($partner, $occasion)->pluck('id')->all())->toBe([$shared->id]);
+});
+
+it('leaves my partner\'s private gifts out of the gifts to wrap', function () {
+    [$me, $partner, $occasion, $ann] = privateGiftSetup();
+    $shared = Gift::factory()->forPersonOn($ann, $occasion)->bought($me)->create();
+    Gift::factory()->forPersonOn($ann, $occasion)->bought($me)->private($me)->create();
+
+    expect(gifts()->toWrap($partner, $occasion)->pluck('id')->all())->toBe([$shared->id]);
+});
+
+it('does not let my partner change, advance, wrap or delete my private gift', function () {
+    [$me, $partner, $occasion, $ann] = privateGiftSetup();
+    $secret = Gift::factory()->forPersonOn($ann, $occasion)->bought($me)->private($me)->create();
+    $data = ['title' => 'x', 'price_cents' => null, 'store' => null, 'url' => null, 'status' => GiftStatus::Bought, 'purchased_by_user_id' => $me->id, 'is_private' => false];
+
+    $attempts = [
+        fn () => app(UpdateGift::class)->handle($partner, $secret->id, $data),
+        fn () => app(AdvanceGiftStatus::class)->handle($partner, $secret->id, GiftStatus::Bought),
+        fn () => app(SetGiftWrapped::class)->handle($partner, $secret->id, true),
+        fn () => app(DeleteGift::class)->handle($partner, $secret->id),
+    ];
+
+    foreach ($attempts as $attempt) {
+        expect($attempt)->toThrow(ModelNotFoundException::class);
+    }
+    expect($secret->fresh())->not->toBeNull();
 });

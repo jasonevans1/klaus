@@ -28,7 +28,7 @@ function summaryOccasion(array $budgets = [null]): array
 }
 
 /**
- * @return array{people: array<int, array{budget: int|null, spent: int, remaining: int|null}>, budget: int, spent: int, remaining: int, noGift: list<string>}
+ * @return array{people: array<int, array{budget: int|null, spent: int, remaining: int|null}>, budget: int, spent: int, remaining: int, noGift: list<string>, privateSpent: int|null}
  */
 function summarize(Occasion $occasion): array
 {
@@ -98,4 +98,52 @@ it('lists the people who have no gifts yet', function () {
     $expected = $occasion->recipients()->get()->reject(fn ($p) => $p->id === $b->id)->pluck('name')->values()->all();
 
     expect(summarize($occasion)['noGift'])->toBe($expected)->toHaveCount(2);
+});
+
+it('leaves private gifts out of a person\'s spent and remaining', function () {
+    [$occasion, $user, [$person]] = summaryOccasion([10000]);
+    Gift::factory()->forPersonOn($person, $occasion)->bought($user)->create(['price_cents' => 3000]);
+    Gift::factory()->forPersonOn($person, $occasion)->bought($user)->private($user)->create(['price_cents' => 2000]);
+
+    expect(summarize($occasion)['people'][$person->id])->toBe(['budget' => 10000, 'spent' => 3000, 'remaining' => 7000]);
+});
+
+it('leaves private gifts out of the season totals', function () {
+    [$occasion, $user, [$a, $b]] = summaryOccasion([10000, 5000]);
+    Gift::factory()->forPersonOn($a, $occasion)->bought($user)->create(['price_cents' => 3000]);
+    Gift::factory()->forPersonOn($b, $occasion)->given($user)->private($user)->create(['price_cents' => 4000]);
+
+    expect(summarize($occasion))->toMatchArray(['budget' => 15000, 'spent' => 3000, 'remaining' => 12000]);
+});
+
+it('adds up what I have spent on my private gifts', function () {
+    [$occasion, $user, [$a, $b]] = summaryOccasion([null, null]);
+    Gift::factory()->forPersonOn($a, $occasion)->bought($user)->private($user)->create(['price_cents' => 1000]);
+    Gift::factory()->forPersonOn($b, $occasion)->wrapped($user)->private($user)->create(['price_cents' => 2000]);
+    Gift::factory()->forPersonOn($b, $occasion)->given($user)->private($user)->create(['price_cents' => 4000]);
+    Gift::factory()->forPersonOn($b, $occasion)->private($user)->create(['price_cents' => 8000]);
+    Gift::factory()->forPersonOn($b, $occasion)->bought($user)->create(['price_cents' => 16000]);
+
+    expect(summarize($occasion)['privateSpent'])->toBe(7000);
+});
+
+it('does not count private ideas as private spending', function () {
+    [$occasion, $user, [$person]] = summaryOccasion();
+    Gift::factory()->forPersonOn($person, $occasion)->private($user)->create(['price_cents' => 5000]);
+
+    expect(summarize($occasion)['privateSpent'])->toBe(0);
+});
+
+it('reports no private spending when there are no private gifts', function () {
+    [$occasion, $user, [$person]] = summaryOccasion();
+    Gift::factory()->forPersonOn($person, $occasion)->bought($user)->create(['price_cents' => 5000]);
+
+    expect(summarize($occasion)['privateSpent'])->toBeNull();
+});
+
+it('counts a private gift as a gift for the no gift list', function () {
+    [$occasion, $user, [$a, $b]] = summaryOccasion([null, null]);
+    Gift::factory()->forPersonOn($a, $occasion)->private($user)->create();
+
+    expect(summarize($occasion)['noGift'])->toBe([$b->name]);
 });

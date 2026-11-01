@@ -227,6 +227,9 @@ new class extends Component
             <flux:text data-total-budget="{{ Budget::format($this->totalBudgetCents) }}">{{ __('Total budget :amount', ['amount' => Budget::format($this->totalBudgetCents)]) }}</flux:text>
             <flux:text data-total-spent="{{ Price::format($summary['spent']) }}">{{ __('Spent :amount', ['amount' => Price::format($summary['spent'])]) }}</flux:text>
             <flux:text data-total-remaining="{{ Price::format($summary['remaining']) }}">{{ __('Remaining :amount', ['amount' => Price::format($summary['remaining'])]) }}</flux:text>
+            @if ($summary['privateSpent'] !== null)
+                <flux:text data-my-private-spent="{{ Price::format($summary['privateSpent']) }}">{{ __('My private gifts: :amount spent', ['amount' => Price::format($summary['privateSpent'])]) }}</flux:text>
+            @endif
         </div>
         <div class="flex items-center gap-2">
             <flux:button :href="route('occasions.shopping', $this->occasion)" wire:navigate data-test="shopping-list-link">{{ __('Shopping list') }}</flux:button>
@@ -290,7 +293,7 @@ new class extends Component
 
                 <div class="space-y-1 pl-4 pt-2">
                     @foreach ($this->giftsByPerson[$person->id] ?? [] as $gift)
-                        <div wire:key="gift-{{ $gift->id }}" data-gift="{{ $gift->title }}" data-price="{{ Price::format($gift->price_cents) }}" data-store="{{ $gift->store }}" data-url="{{ $gift->url }}" data-status="{{ $gift->status->label() }}" data-buyer="{{ $gift->purchasedBy?->name }}" class="flex items-center gap-4">
+                        <div wire:key="gift-{{ $gift->id }}" data-gift="{{ $gift->title }}" data-price="{{ Price::format($gift->price_cents) }}" data-store="{{ $gift->store }}" data-url="{{ $gift->url }}" data-status="{{ $gift->status->label() }}" data-buyer="{{ $gift->purchasedBy?->name }}" data-private="{{ $gift->is_private ? 'yes' : 'no' }}" class="flex items-center gap-4">
                             @if ($gift->url)
                                 <a href="{{ $gift->url }}" target="_blank" rel="noopener noreferrer" class="underline">{{ $gift->title }}</a>
                             @else
@@ -301,6 +304,9 @@ new class extends Component
                                 <flux:text size="sm">{{ $gift->store }}</flux:text>
                             @endif
                             <flux:badge size="sm">{{ $gift->status->label() }}</flux:badge>
+                            @if ($gift->is_private)
+                                <flux:badge size="sm" color="purple">{{ __('Private') }}</flux:badge>
+                            @endif
                             @if ($gift->purchasedBy)
                                 <flux:text size="sm">{{ __('Bought by :name', ['name' => $gift->purchasedBy->name]) }}</flux:text>
                             @endif
@@ -375,6 +381,10 @@ new class extends Component
                     <flux:select.option value="{{ $buyer->id }}">{{ $buyer->name }}</flux:select.option>
                 @endforeach
             </flux:select>
+
+            @if ($giftForm->canSetPrivate)
+                <flux:checkbox wire:model="giftForm.isPrivate" :label="__('Private (only you can see it)')" />
+            @endif
 
             <div class="flex justify-end gap-2">
                 @unless ($giftForm->giftId)

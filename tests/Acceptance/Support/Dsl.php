@@ -310,7 +310,8 @@ final class Member
             $page->set('giftForm.title', $gift->title)
                 ->set('giftForm.price', $gift->price)
                 ->set('giftForm.store', $gift->store)
-                ->set('giftForm.url', $gift->link);
+                ->set('giftForm.url', $gift->link)
+                ->set('giftForm.isPrivate', $gift->private);
 
             if ($gift->status !== null) {
                 $this->entersStatus($page, $gift->status, $gift->buyer);
@@ -793,6 +794,10 @@ final class SeenOccasion
      * @param  array<string, array{spent: string, remaining: string, text: string}>  $spending  person name => spent and remaining as shown
      *                                                                                          (remaining "" when they have no budget), and their row's text
      * @param  list<string>  $noGift  the names listed under "No gift yet", in the order shown
+     * @param  array<string, list<array{title: string, private: string}>>  $giftPrivacy  person name => each of their gifts
+     *                                                                                   and whether it is marked private ("yes", "no", or "" when unmarked)
+     * @param  string|null  $myPrivateSpent  the "My private gifts" spent amount as shown, or null when there is no such line
+     * @param  string  $html  everything the page sends to my browser
      */
     public function __construct(
         public readonly array $groups,
@@ -804,6 +809,10 @@ final class SeenOccasion
         public readonly string $totalRemaining = '',
         public readonly array $noGift = [],
         public readonly bool $showsNoGiftHeading = false,
+        public readonly array $giftPrivacy = [],
+        public readonly ?string $myPrivateSpent = null,
+        public readonly string $myPrivateText = '',
+        public readonly string $html = '',
     ) {}
 
     /**
@@ -880,6 +889,22 @@ final class SeenOccasion
             $noGift[] = $row->getAttribute('data-no-gift');
         }
 
+        // Whether each gift is marked as private.
+        $privacy = [];
+        foreach ($xpath->query('//*[@data-person]') as $row) {
+            $privacy[$row->getAttribute('data-person')] = [];
+            $block = $xpath->query('ancestor::*[@*[name()="wire:key"]][1]', $row)->item(0);
+
+            foreach ($block === null ? [] : $xpath->query('.//*[@data-gift]', $block) as $gift) {
+                $privacy[$row->getAttribute('data-person')][] = [
+                    'title' => $gift->getAttribute('data-gift'),
+                    'private' => $gift->getAttribute('data-private'),
+                ];
+            }
+        }
+
+        $myPrivate = $xpath->query('//*[@data-my-private-spent]')->item(0);
+
         return new self(
             $groups,
             $total->getAttribute('data-total-budget'),
@@ -890,6 +915,10 @@ final class SeenOccasion
             $totalRemaining?->getAttribute('data-total-remaining') ?? '',
             $noGift,
             str_contains((string) preg_replace('/\s+/', ' ', $dom->textContent), 'No gift yet'),
+            $privacy,
+            $myPrivate?->getAttribute('data-my-private-spent'),
+            $myPrivate === null ? '' : trim((string) preg_replace('/\s+/', ' ', $myPrivate->textContent)),
+            $html,
         );
     }
 }
@@ -986,6 +1015,8 @@ final class GiftEntry
 
     public ?string $buyer = null;
 
+    public bool $private = false;
+
     public function __construct(public readonly string $title) {}
 
     /**
@@ -994,6 +1025,16 @@ final class GiftEntry
     public function thatIs(string $status, ?string $by = null): self
     {
         [$this->status, $this->buyer] = [$status, $by];
+
+        return $this;
+    }
+
+    /**
+     * Enter the gift with "Private" ticked in the gift window, so only I can see it.
+     */
+    public function privately(): self
+    {
+        $this->private = true;
 
         return $this;
     }
@@ -1033,6 +1074,7 @@ final class SeenShoppingList
 {
     /**
      * @param  list<array{string, string, string, string, string}>  $ideas
+     * @param  list<array{for: string, title: string, private: string, text: string}>  $privacy  each row and whether it is marked private
      */
     public function __construct(
         public readonly array $ideas,
@@ -1040,6 +1082,8 @@ final class SeenShoppingList
         public readonly string $total,
         public readonly string $header,
         public readonly bool $saysNothingLeft,
+        public readonly array $privacy = [],
+        public readonly string $html = '',
     ) {}
 
     public static function read(string $html): self
@@ -1070,6 +1114,8 @@ final class SeenShoppingList
             $total->getAttribute('data-ideas-total'),
             trim((string) preg_replace('/\s+/', ' ', $count->textContent)),
             str_contains((string) preg_replace('/\s+/', ' ', $dom->textContent), 'Nothing left to buy.'),
+            listPrivacy($xpath, 'data-idea'),
+            $html,
         );
     }
 }
@@ -1123,6 +1169,7 @@ final class SeenWrappingChecklist
 {
     /**
      * @param  list<array{string, string, string}>  $gifts
+     * @param  list<array{for: string, title: string, private: string, text: string}>  $privacy  each row and whether it is marked private
      */
     public function __construct(
         public readonly array $gifts,
@@ -1130,6 +1177,8 @@ final class SeenWrappingChecklist
         public readonly string $total,
         public readonly string $header,
         public readonly bool $saysNothingToWrap,
+        public readonly array $privacy = [],
+        public readonly string $html = '',
     ) {}
 
     public static function read(string $html): self
@@ -1163,6 +1212,8 @@ final class SeenWrappingChecklist
             $total->getAttribute('data-to-wrap-count'),
             trim((string) preg_replace('/\s+/', ' ', $wrappedCount->textContent)),
             str_contains((string) preg_replace('/\s+/', ' ', $dom->textContent), 'Nothing to wrap yet.'),
+            listPrivacy($xpath, 'data-wrap'),
+            $html,
         );
     }
 }
@@ -1234,4 +1285,24 @@ final class OpenWrappingChecklist
     {
         return SeenWrappingChecklist::read($this->page->html());
     }
+}
+
+/**
+ * Each row of a list (shopping or wrapping) as [who it is for, title, whether it is marked private, its text].
+ *
+ * @return list<array{for: string, title: string, private: string, text: string}>
+ */
+function listPrivacy(DOMXPath $xpath, string $titleAttribute): array
+{
+    $rows = [];
+    foreach ($xpath->query('//*[@'.$titleAttribute.']') as $row) {
+        $rows[] = [
+            'for' => $row->getAttribute('data-for'),
+            'title' => $row->getAttribute($titleAttribute),
+            'private' => $row->getAttribute('data-private'),
+            'text' => trim((string) preg_replace('/\s+/', ' ', $row->textContent)),
+        ];
+    }
+
+    return $rows;
 }

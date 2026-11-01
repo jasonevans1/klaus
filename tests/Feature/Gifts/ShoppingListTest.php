@@ -153,3 +153,25 @@ it("refuses to mark another household's gift bought", function () {
 
     expect($gift->refresh()->status)->toBe(GiftStatus::Idea);
 });
+
+it('badges my private ideas on the shopping list', function () {
+    [$user, $occasion] = shoppingSetup();
+    shoppingGift($user, $occasion, 'Mum', ['title' => 'Perfume'])->forceFill(['is_private' => true])->save();
+    shoppingGift($user, $occasion, 'Mum', ['title' => 'Scarf']);
+
+    shoppingPage($user, $occasion)
+        ->assertSeeHtml('data-idea="Perfume"')
+        ->assertSeeHtmlInOrder(['data-idea="Perfume"', 'data-private="yes"', 'Private', 'data-idea="Scarf"', 'data-private="no"'])
+        ->assertSee('Private', 1);
+});
+
+it('shows my partner nothing about my private ideas on the shopping list', function () {
+    [$user, $occasion] = shoppingSetup();
+    $partner = User::factory()->create(['household_id' => $user->household_id]);
+    shoppingGift($user, $occasion, 'Mum', ['title' => 'Perfume', 'price_cents' => 6400])->forceFill(['is_private' => true])->save();
+
+    shoppingPage($partner, $occasion)
+        ->assertDontSee('Perfume')
+        ->assertDontSee('Private')
+        ->assertSeeHtml('data-ideas-count="0"');
+});

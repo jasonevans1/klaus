@@ -6,6 +6,8 @@ namespace App\Models;
 
 use App\Enums\GiftStatus;
 use Database\Factories\GiftFactory;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,7 +37,7 @@ class Gift extends Model
     /** @use HasFactory<GiftFactory> */
     use HasFactory;
 
-    protected $attributes = ['status' => 'idea'];
+    protected $attributes = ['status' => 'idea', 'is_private' => false];
 
     protected $fillable = [
         'title',
@@ -52,7 +54,20 @@ class Gift extends Model
         return [
             'status' => GiftStatus::class,
             'price_cents' => 'integer',
+            'is_private' => 'boolean',
         ];
+    }
+
+    /**
+     * The household's gifts, minus other people's private ones.
+     *
+     * @param  Builder<Gift>  $query
+     */
+    #[Scope]
+    protected function visibleTo(Builder $query, User $user): void
+    {
+        $query->where('household_id', $user->household_id)
+            ->where(fn (Builder $q) => $q->where('is_private', false)->orWhere('created_by_user_id', $user->id));
     }
 
     /**
