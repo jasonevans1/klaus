@@ -408,6 +408,54 @@ final class Member
         return new OpenWrappingChecklist($this, $page);
     }
 
+    /**
+     * Add ideas for the person on the Ideas page, with no occasion, typing them in one after another with
+     * "Save and add another" and pressing Save after the last one.
+     */
+    public function addsIdeas(string $for, GiftEntry ...$ideas): void
+    {
+        $page = Livewire::actingAs($this->user)
+            ->test('pages::ideas.index')
+            ->call('addIdea', $this->personId($for));
+
+        foreach ($ideas as $i => $idea) {
+            $page->set('form.title', $idea->title)
+                ->set('form.price', $idea->price)
+                ->set('form.store', $idea->store)
+                ->set('form.url', $idea->link)
+                ->set('form.isPrivate', $idea->private)
+                ->call($i === array_key_last($ideas) ? 'saveIdea' : 'saveIdeaAndAddAnother')
+                ->assertHasNoErrors();
+        }
+
+        auth()->logout();
+    }
+
+    /**
+     * What the Ideas page shows me: every active person with their year-round ideas.
+     */
+    public function ideaList(): SeenIdeaList
+    {
+        $html = Livewire::actingAs($this->user)->test('pages::ideas.index')->html();
+
+        auth()->logout();
+
+        return SeenIdeaList::read($html);
+    }
+
+    /**
+     * Click "Add to this occasion" on the person's year-round idea called $title on the occasion page.
+     */
+    public function addsIdeaTo(string $occasion, string $for, string $title): void
+    {
+        $page = Livewire::actingAs($this->user)
+            ->test('pages::occasions.show', ['occasion' => $this->occasionId($occasion)]);
+
+        $page->call('assignIdea', $this->giftId($for, $title));
+
+        auth()->logout();
+    }
+
     public function giftId(string $for, string $title): int
     {
         return Gift::where('household_id', $this->user->household_id)
@@ -798,6 +846,8 @@ final class SeenOccasion
      *                                                                                   and whether it is marked private ("yes", "no", or "" when unmarked)
      * @param  string|null  $myPrivateSpent  the "My private gifts" spent amount as shown, or null when there is no such line
      * @param  string  $html  everything the page sends to my browser
+     * @param  array<string, list<array{title: string, price: string, button: string|null}>>  $yearRoundIdeas  person name => the
+     *                                                                                                         year-round ideas listed under them, with the text of each one's button
      */
     public function __construct(
         public readonly array $groups,
@@ -813,6 +863,7 @@ final class SeenOccasion
         public readonly ?string $myPrivateSpent = null,
         public readonly string $myPrivateText = '',
         public readonly string $html = '',
+        public readonly array $yearRoundIdeas = [],
     ) {}
 
     /**
@@ -905,6 +956,23 @@ final class SeenOccasion
 
         $myPrivate = $xpath->query('//*[@data-my-private-spent]')->item(0);
 
+        // Year-round ideas (with no occasion) listed under each person, waiting to be added to this occasion.
+        $yearRound = [];
+        foreach ($xpath->query('//*[@data-person]') as $row) {
+            $yearRound[$row->getAttribute('data-person')] = [];
+            $block = $xpath->query('ancestor::*[@*[name()="wire:key"]][1]', $row)->item(0);
+
+            foreach ($block === null ? [] : $xpath->query('.//*[@data-year-round-idea]', $block) as $idea) {
+                $button = $xpath->query('.//*[@data-test="assign-idea-button"]', $idea)->item(0);
+
+                $yearRound[$row->getAttribute('data-person')][] = [
+                    'title' => $idea->getAttribute('data-year-round-idea'),
+                    'price' => $idea->getAttribute('data-price'),
+                    'button' => $button === null ? null : trim((string) preg_replace('/\s+/', ' ', $button->textContent)),
+                ];
+            }
+        }
+
         return new self(
             $groups,
             $total->getAttribute('data-total-budget'),
@@ -919,7 +987,57 @@ final class SeenOccasion
             $myPrivate?->getAttribute('data-my-private-spent'),
             $myPrivate === null ? '' : trim((string) preg_replace('/\s+/', ' ', $myPrivate->textContent)),
             $html,
+            $yearRound,
         );
+    }
+}
+
+/**
+ * The Ideas page as I see it: person name => their year-round ideas, each [title, price, store, link], in the order shown,
+ * plus whether each idea is marked private.
+ */
+final class SeenIdeaList
+{
+    /**
+     * @param  array<string, list<array{string, string, string, string}>>  $ideas
+     * @param  array<string, list<array{title: string, private: string, text: string}>>  $privacy
+     */
+    public function __construct(
+        public readonly array $ideas,
+        public readonly array $privacy,
+        public readonly string $html,
+    ) {}
+
+    public static function read(string $html): self
+    {
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+        $xpath = new DOMXPath($dom);
+
+        $ideas = $privacy = [];
+        foreach ($xpath->query('//*[@data-person]') as $row) {
+            $name = $row->getAttribute('data-person');
+            [$ideas[$name], $privacy[$name]] = [[], []];
+
+            // A person's ideas are in the keyed block that is (or holds) the person's row.
+            $block = $xpath->query('ancestor-or-self::*[@*[name()="wire:key"]][1]', $row)->item(0);
+
+            foreach ($block === null ? [] : $xpath->query('.//*[@data-idea]', $block) as $idea) {
+                $ideas[$name][] = [
+                    $idea->getAttribute('data-idea'),
+                    $idea->getAttribute('data-price'),
+                    $idea->getAttribute('data-store'),
+                    $idea->getAttribute('data-url'),
+                ];
+                $privacy[$name][] = [
+                    'title' => $idea->getAttribute('data-idea'),
+                    'private' => $idea->getAttribute('data-private'),
+                    'text' => trim((string) preg_replace('/\s+/', ' ', $idea->textContent)),
+                ];
+            }
+        }
+
+        return new self($ideas, $privacy, $html);
     }
 }
 

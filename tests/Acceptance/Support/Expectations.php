@@ -327,7 +327,7 @@ expect()->extend('toBadgeAsPrivate', function (array $rows) {
  * Nothing the page sends to my browser (text, attributes, hidden windows or page state) mentions any of these words, ignoring case.
  */
 expect()->extend('toShowNoTraceOf', function (string ...$words) {
-    expect($this->value instanceof SeenOccasion || $this->value instanceof SeenShoppingList || $this->value instanceof SeenWrappingChecklist)->toBeTrue()
+    expect($this->value instanceof SeenOccasion || $this->value instanceof SeenShoppingList || $this->value instanceof SeenWrappingChecklist || $this->value instanceof SeenIdeaList)->toBeTrue()
         ->and($this->value->html)->not->toBe('');
 
     $page = mb_strtolower(html_entity_decode(stripslashes($this->value->html), ENT_QUOTES | ENT_HTML5));
@@ -335,6 +335,66 @@ expect()->extend('toShowNoTraceOf', function (string ...$words) {
     foreach ($words as $word) {
         expect(str_contains($page, mb_strtolower($word)))->toBeFalse("The page shows a trace of \"{$word}\"");
     }
+
+    return $this;
+});
+
+/**
+ * The Ideas page lists exactly these people with exactly these year-round ideas under them, each [title, price, store, link],
+ * people and ideas in the order shown, e.g. ['Mum' => [], 'Pluto' => [['Dog bed', '$80', 'Petco', '']]].
+ */
+expect()->extend('toShowIdeas', function (array $ideasByPerson) {
+    expect($this->value)->toBeInstanceOf(SeenIdeaList::class)
+        ->and($this->value->ideas)->toBe($ideasByPerson);
+
+    return $this;
+});
+
+/**
+ * Exactly these ideas on the Ideas page are marked private, with a "Private" badge on their row, e.g. ['Sam' => ['Diving watch']];
+ * every other idea is marked as not private and has no badge.
+ */
+expect()->extend('toShowPrivateIdeas', function (array $privateByPerson) {
+    expect($this->value)->toBeInstanceOf(SeenIdeaList::class);
+
+    $seen = [];
+    foreach ($this->value->privacy as $person => $ideas) {
+        foreach ($ideas as $idea) {
+            expect($idea['private'])->toBeIn(['yes', 'no'], "{$idea['title']} for {$person} is not marked private or not private");
+
+            $isPrivate = $idea['private'] === 'yes';
+
+            expect((bool) preg_match('/\bPrivate\b/', $idea['text']))->toBe($isPrivate, "{$idea['title']} for {$person}: Private badge should be ".($isPrivate ? 'shown' : 'absent'));
+
+            if ($isPrivate) {
+                $seen[$person][] = $idea['title'];
+            }
+        }
+    }
+
+    expect($seen)->toBe($privateByPerson);
+
+    return $this;
+});
+
+/**
+ * Every person on the occasion page with exactly these year-round ideas listed under them, each [title, price], in the order shown,
+ * and each with an "Add to this occasion" button, e.g. ['Mum' => [], 'Pluto' => [['Dog bed', '$80']]].
+ */
+expect()->extend('toShowYearRoundIdeas', function (array $ideasByPerson) {
+    expect($this->value)->toBeInstanceOf(SeenOccasion::class);
+
+    $seen = [];
+    foreach ($this->value->yearRoundIdeas as $person => $ideas) {
+        $seen[$person] = [];
+        foreach ($ideas as $idea) {
+            expect($idea['button'])->toBe('Add to this occasion', "{$idea['title']} for {$person} has no \"Add to this occasion\" button");
+
+            $seen[$person][] = [$idea['title'], $idea['price']];
+        }
+    }
+
+    expect($seen)->toBe($ideasByPerson);
 
     return $this;
 });

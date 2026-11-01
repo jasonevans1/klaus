@@ -47,6 +47,11 @@ class GiftFactory extends Factory
         ]);
     }
 
+    public function yearRound(): static
+    {
+        return $this->state(['occasion_id' => null]);
+    }
+
     public function bought(User $buyer): static
     {
         return $this->purchased(GiftStatus::Bought, $buyer);

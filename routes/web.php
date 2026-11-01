@@ -14,6 +14,7 @@ Route::get('invitations/{token}', function (string $token) {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::view('dashboard', 'dashboard')->name('dashboard');
     Route::livewire('people', 'pages::people.index')->name('people.index');
+    Route::livewire('ideas', 'pages::ideas.index')->name('ideas.index');
     Route::livewire('occasions', 'pages::occasions.index')->name('occasions.index');
     Route::livewire('occasions/{occasion}', 'pages::occasions.show')->whereNumber('occasion')->name('occasions.show');
     Route::livewire('occasions/{occasion}/shopping', 'pages::occasions.shopping')->whereNumber('occasion')->name('occasions.shopping');
