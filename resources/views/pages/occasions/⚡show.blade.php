@@ -2,6 +2,7 @@
 
 use App\Actions\Gifts\AddGift;
 use App\Actions\Gifts\AdvanceGiftStatus;
+use App\Actions\Gifts\AssignIdeaToOccasion;
 use App\Actions\Gifts\DeleteGift;
 use App\Actions\Gifts\UpdateGift;
 use App\Actions\Occasions\AddPeopleToOccasion;
@@ -134,6 +135,17 @@ new class extends Component
         unset($this->giftsByPerson);
     }
 
+    public function assignIdea(int $giftId): void
+    {
+        $gift = app(AssignIdeaToOccasion::class)->handle(Auth::user(), $giftId, $this->occasionId);
+
+        unset($this->giftsByPerson, $this->yearRoundIdeas);
+
+        if ($gift->occasion_id === $this->occasionId) {
+            Flux::toast(variant: 'success', text: __('Added :title.', ['title' => $gift->title]));
+        }
+    }
+
     public function saveGift(): void
     {
         $this->persistGift();
@@ -162,6 +174,12 @@ new class extends Component
     public function giftsByPerson(): array
     {
         return app(GiftRepository::class)->byPerson(Auth::user(), $this->occasion);
+    }
+
+    #[Computed]
+    public function yearRoundIdeas(): array
+    {
+        return app(GiftRepository::class)->yearRoundIdeas(Auth::user());
     }
 
     #[Computed]
@@ -318,6 +336,20 @@ new class extends Component
                         </div>
                     @endforeach
                     <flux:button size="sm" wire:click="addGift({{ $person->id }})" data-test="add-gift-button">{{ __('Add gift') }}</flux:button>
+
+                    @if ($ideas = $this->yearRoundIdeas[$person->id] ?? null)
+                        <flux:heading size="sm" class="pt-2">{{ __('Year-round ideas') }}</flux:heading>
+                        @foreach ($ideas as $idea)
+                            <div wire:key="year-round-idea-{{ $idea->id }}" data-year-round-idea="{{ $idea->title }}" data-price="{{ Price::format($idea->price_cents) }}" data-private="{{ $idea->is_private ? 'yes' : 'no' }}" class="flex items-center gap-4">
+                                <flux:text variant="strong">{{ $idea->title }}</flux:text>
+                                <flux:text size="sm">{{ Price::format($idea->price_cents) }}</flux:text>
+                                @if ($idea->is_private)
+                                    <flux:badge size="sm" color="purple">{{ __('Private') }}</flux:badge>
+                                @endif
+                                <flux:button size="xs" wire:click="assignIdea({{ $idea->id }})" data-test="assign-idea-button">{{ __('Add to this occasion') }}</flux:button>
+                            </div>
+                        @endforeach
+                    @endif
                 </div>
                 </div>
             @endforeach

@@ -462,3 +462,73 @@ it('hides the private checkbox when I edit my partner\'s gift', function () {
         ->call('editGift', $gift->id)
         ->assertDontSee('Private (only you can see it)');
 });
+
+function yearRoundIdea(User $owner, Recipient $person, array $attrs = []): Gift
+{
+    return Gift::factory()->yearRound()->create(array_merge([
+        'household_id' => $owner->household_id,
+        'recipient_id' => $person->id,
+        'created_by_user_id' => $owner->id,
+        'title' => 'Dog bed',
+        'price_cents' => 8000,
+    ], $attrs));
+}
+
+it('lists a person\'s year-round ideas under them on the occasion page', function () {
+    $user = User::factory()->create();
+    $occasion = christmasFor($user);
+    $pluto = personFor($occasion, 'Pluto');
+    yearRoundIdea($user, $pluto);
+
+    giftsPage($user, $occasion)
+        ->assertSee('Year-round ideas')
+        ->assertSeeHtml('data-year-round-idea="Dog bed"')
+        ->assertSeeHtml('data-price="$80"')
+        ->assertSeeHtml('data-test="assign-idea-button"')
+        ->assertSee('Add to this occasion');
+});
+
+it('does not count year-round ideas in spent or take a person off No gift yet', function () {
+    $user = User::factory()->create();
+    $occasion = christmasFor($user);
+    $pluto = personFor($occasion, 'Pluto');
+    yearRoundIdea($user, $pluto, ['status' => GiftStatus::Bought, 'purchased_by_user_id' => $user->id]);
+
+    giftsPage($user, $occasion)
+        ->assertSeeHtml('data-no-gift="Pluto"')
+        ->assertSeeHtml('data-total-spent="$0"');
+});
+
+it('moves an idea onto the occasion when I click Add to this occasion', function () {
+    $user = User::factory()->create();
+    $occasion = christmasFor($user);
+    $pluto = personFor($occasion, 'Pluto');
+    $idea = yearRoundIdea($user, $pluto);
+
+    giftsPage($user, $occasion)->call('assignIdea', $idea->id)
+        ->assertSeeHtml('data-gift="Dog bed"')
+        ->assertDontSeeHtml('data-year-round-idea="Dog bed"');
+
+    expect($idea->fresh()->occasion_id)->toBe($occasion->id);
+});
+
+it('hides my partner\'s private year-round ideas on the occasion page', function () {
+    $user = User::factory()->create();
+    $partner = User::factory()->create(['household_id' => $user->household_id]);
+    $occasion = christmasFor($user);
+    $pluto = personFor($occasion, 'Pluto');
+    yearRoundIdea($partner, $pluto, ['title' => 'Surprise', 'is_private' => true]);
+
+    giftsPage($user, $occasion)->assertDontSee('Surprise');
+    giftsPage($partner, $occasion)->assertSeeHtml('data-year-round-idea="Surprise"')->assertSeeHtml('data-private="yes"');
+});
+
+it('does not show year-round ideas for people who are not on the occasion', function () {
+    $user = User::factory()->create();
+    $occasion = christmasFor($user);
+    personFor($occasion, 'Mum');
+    $other = Recipient::factory()->forHousehold($occasion->household)->create(['name' => 'Dad']);
+    yearRoundIdea($user, $other, ['title' => 'Tie']);
+
+    giftsPage($user, $occasion)->assertDontSee('Tie');
+});

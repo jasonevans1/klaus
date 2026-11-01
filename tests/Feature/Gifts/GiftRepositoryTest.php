@@ -271,3 +271,39 @@ it('does not let my partner change, advance, wrap or delete my private gift', fu
     }
     expect($secret->fresh())->not->toBeNull();
 });
+
+it('lists a household\'s year-round ideas by person in the order they were added', function () {
+    $user = User::factory()->create();
+    $ann = Recipient::factory()->create(['household_id' => $user->household_id]);
+    $bob = Recipient::factory()->create(['household_id' => $user->household_id]);
+    $first = Gift::factory()->yearRound()->create(['household_id' => $user->household_id, 'recipient_id' => $ann->id]);
+    $other = Gift::factory()->yearRound()->create(['household_id' => $user->household_id, 'recipient_id' => $bob->id]);
+    $second = Gift::factory()->yearRound()->create(['household_id' => $user->household_id, 'recipient_id' => $ann->id]);
+
+    $byPerson = gifts()->yearRoundIdeas($user);
+
+    expect($byPerson[$ann->id]->pluck('id')->all())->toBe([$first->id, $second->id])
+        ->and($byPerson[$bob->id]->pluck('id')->all())->toBe([$other->id]);
+});
+
+it('leaves gifts that are on an occasion out of the year-round ideas', function () {
+    $user = User::factory()->create();
+    $occasion = Occasion::factory()->forHousehold($user->household)->create();
+    $ann = Recipient::factory()->create(['household_id' => $user->household_id]);
+    Gift::factory()->forPersonOn($ann, $occasion)->create();
+    $idea = Gift::factory()->yearRound()->create(['household_id' => $user->household_id, 'recipient_id' => $ann->id]);
+
+    expect(gifts()->yearRoundIdeas($user)[$ann->id]->pluck('id')->all())->toBe([$idea->id]);
+});
+
+it('leaves my partner\'s private ideas out of my year-round ideas but includes mine', function () {
+    $user = User::factory()->create();
+    $partner = User::factory()->create(['household_id' => $user->household_id]);
+    $ann = Recipient::factory()->create(['household_id' => $user->household_id]);
+    $attrs = ['household_id' => $user->household_id, 'recipient_id' => $ann->id];
+    $shared = Gift::factory()->yearRound()->create($attrs);
+    $mine = Gift::factory()->yearRound()->private($user)->create($attrs);
+    Gift::factory()->yearRound()->private($partner)->create($attrs);
+
+    expect(gifts()->yearRoundIdeas($user)[$ann->id]->pluck('id')->all())->toBe([$shared->id, $mine->id]);
+});

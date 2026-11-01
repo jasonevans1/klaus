@@ -33,6 +33,20 @@ class GiftRepository
     }
 
     /**
+     * @return array<int, Collection<int, Gift>>
+     */
+    public function yearRoundIdeas(User $user): array
+    {
+        return Gift::query()
+            ->visibleTo($user)
+            ->whereNull('occasion_id')
+            ->orderBy('id')
+            ->get()
+            ->groupBy('recipient_id')
+            ->all();
+    }
+
+    /**
      * @return Collection<int, Gift>
      */
     public function ideas(User $user, Occasion $occasion): Collection
