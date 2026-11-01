@@ -90,7 +90,7 @@ Each feature is one HCF plan, small enough to build, test and deploy on its own.
   - Done when: wrapping night is one list.
 - [x] **10. Private gifts** — Private flag on a gift; hidden from my partner and excluded from shared totals; a "My private gifts" line for the owner.
   - Done when: my partner's view shows nothing about gifts I'm buying for them.
-- [ ] **11. Idea list** — Add ideas to a person anytime with no occasion; assign an idea to an occasion later.
+- [x] **11. Idea list** — Add ideas to a person anytime with no occasion; assign an idea to an occasion later.
   - Done when: an idea added in March shows up when planning Christmas.
 - [ ] **12. Person page with history** — Profile with birthday and interests, ideas, and gifts from past occasions by year.
   - Done when: I can see what someone got last Christmas.
