@@ -113,3 +113,49 @@ it("keeps the gift but forgets the buyer when the buyer's account is deleted", f
     expect($gift)->not->toBeNull()
         ->and($gift->purchased_by_user_id)->toBeNull();
 });
+
+it('makes a new gift not private', function () {
+    expect((new Gift)->is_private)->toBeFalse()
+        ->and(Gift::factory()->create()->fresh()->is_private)->toBeFalse();
+});
+
+it("reads a gift's private flag as a boolean", function () {
+    $owner = User::factory()->create();
+    $gift = Gift::factory()->private($owner)->create()->fresh();
+
+    expect($gift->is_private)->toBeTrue()
+        ->and($gift->created_by_user_id)->toBe($owner->id);
+});
+
+it('shows a private gift to the person who added it', function () {
+    $me = User::factory()->create();
+    $gift = Gift::factory()->private($me)->create(['household_id' => $me->household_id]);
+
+    expect(Gift::visibleTo($me)->pluck('id')->all())->toBe([$gift->id]);
+});
+
+it('hides a private gift from the other household member', function () {
+    $me = User::factory()->create();
+    $partner = User::factory()->forHousehold($me->household)->create();
+    Gift::factory()->private($me)->create(['household_id' => $me->household_id]);
+
+    expect(Gift::visibleTo($partner)->count())->toBe(0);
+});
+
+it('shows gifts that are not private to both household members', function () {
+    $me = User::factory()->create();
+    $partner = User::factory()->forHousehold($me->household)->create();
+    $gift = Gift::factory()->create(['household_id' => $me->household_id, 'created_by_user_id' => $me->id]);
+
+    expect(Gift::visibleTo($me)->pluck('id')->all())->toBe([$gift->id])
+        ->and(Gift::visibleTo($partner)->pluck('id')->all())->toBe([$gift->id]);
+});
+
+it('hides every gift from another household', function () {
+    $me = User::factory()->create();
+    $stranger = User::factory()->create();
+    Gift::factory()->create(['household_id' => $me->household_id]);
+    Gift::factory()->private($me)->create(['household_id' => $me->household_id]);
+
+    expect(Gift::visibleTo($stranger)->count())->toBe(0);
+});

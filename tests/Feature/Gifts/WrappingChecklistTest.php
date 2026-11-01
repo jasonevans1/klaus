@@ -163,3 +163,24 @@ it("refuses to tick another household's gift", function () {
     wrappingPage($user, $mine)->call('setWrapped', $theirs->id, true)->assertNotFound();
     expect($theirs->fresh()->status)->toBe(GiftStatus::Bought);
 });
+
+it('badges my private gifts on the wrapping checklist', function () {
+    [$user, $occasion] = wrappingSetup();
+    wrappingGift($user, $occasion, 'Mum', 'Perfume', GiftStatus::Bought)->forceFill(['is_private' => true])->save();
+    wrappingGift($user, $occasion, 'Mum', 'Scarf', GiftStatus::Bought);
+
+    wrappingPage($user, $occasion)
+        ->assertSeeHtmlInOrder(['data-wrap="Perfume"', 'data-private="yes"', 'Private', 'data-wrap="Scarf"', 'data-private="no"'])
+        ->assertSee('Private', 1);
+});
+
+it('shows my partner nothing about my private gifts on the wrapping checklist', function () {
+    [$user, $occasion] = wrappingSetup();
+    $partner = User::factory()->create(['household_id' => $user->household_id]);
+    wrappingGift($user, $occasion, 'Mum', 'Perfume', GiftStatus::Bought)->forceFill(['is_private' => true])->save();
+
+    wrappingPage($partner, $occasion)
+        ->assertDontSee('Perfume')
+        ->assertDontSee('Private')
+        ->assertSeeHtml('data-to-wrap-count="0"');
+});

@@ -85,3 +85,15 @@ it('keeps the plain delete confirmation for an occasion with no gifts', function
 
     occasionsPage($user)->assertSeeHtml('Delete Christmas 2026?');
 });
+
+it('does not count my partner\'s private gifts in the occasion delete warning', function () {
+    $me = User::factory()->create();
+    $partner = User::factory()->create(['household_id' => $me->household_id]);
+    $occasion = Occasion::factory()->forHousehold($me->household)->christmas(2026)->create();
+    $person = Recipient::factory()->forHousehold($me->household)->create();
+    Gift::factory()->count(2)->forPersonOn($person, $occasion)->create();
+    Gift::factory()->forPersonOn($person, $occasion)->private($me)->create();
+
+    occasionsPage($partner)->assertSeeHtml('Delete Christmas 2026 and its 2 gifts?');
+    occasionsPage($me)->assertSeeHtml('Delete Christmas 2026 and its 3 gifts?');
+});

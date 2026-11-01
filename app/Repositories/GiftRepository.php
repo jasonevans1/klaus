@@ -14,8 +14,7 @@ class GiftRepository
 {
     public function findForUser(User $user, int $id): Gift
     {
-        // ponytail: private-gift filtering (feature 10) goes in here and in byPerson.
-        return Gift::query()->where('household_id', $user->household_id)->findOrFail($id);
+        return Gift::query()->visibleTo($user)->findOrFail($id);
     }
 
     /**
@@ -24,7 +23,7 @@ class GiftRepository
     public function byPerson(User $user, Occasion $occasion): array
     {
         return Gift::query()
-            ->where('household_id', $user->household_id)
+            ->visibleTo($user)
             ->where('occasion_id', $occasion->id)
             ->with('purchasedBy')
             ->orderBy('id')
@@ -55,9 +54,8 @@ class GiftRepository
      */
     private function withStatuses(User $user, Occasion $occasion, array $statuses): Collection
     {
-        // ponytail: private-gift filtering (feature 10) goes in here too.
         return Gift::query()
-            ->where('household_id', $user->household_id)
+            ->visibleTo($user)
             ->where('occasion_id', $occasion->id)
             ->whereIn('status', $statuses)
             ->with('recipient')

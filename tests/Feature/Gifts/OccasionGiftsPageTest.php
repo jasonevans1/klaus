@@ -369,3 +369,96 @@ it('offers both household members as buyers in the gift window', function () {
         ->assertSeeHtml('value="bought"')
         ->assertSee(['Jason', 'Sam']);
 });
+
+function privateGiftFor(User $owner, Occasion $occasion, Recipient $person, array $attrs = []): Gift
+{
+    return Gift::factory()->private($owner)->create(array_merge([
+        'household_id' => $owner->household_id,
+        'occasion_id' => $occasion->id,
+        'recipient_id' => $person->id,
+    ], $attrs));
+}
+
+it('adds a private gift from the gift window', function () {
+    $user = User::factory()->create();
+    $occasion = christmasFor($user);
+    $mum = personFor($occasion, 'Mum');
+
+    giftsPage($user, $occasion)
+        ->call('addGift', $mum->id)
+        ->assertSee('Private (only you can see it)')
+        ->set('giftForm.title', 'Surprise')
+        ->set('giftForm.isPrivate', true)
+        ->call('saveGift')
+        ->assertHasNoErrors();
+
+    expect(Gift::firstWhere('title', 'Surprise')->is_private)->toBeTrue();
+});
+
+it('badges my private gifts on the occasion page', function () {
+    $user = User::factory()->create();
+    $occasion = christmasFor($user);
+    $mum = personFor($occasion, 'Mum');
+    privateGiftFor($user, $occasion, $mum, ['title' => 'Surprise']);
+    giftFor($user, $occasion, $mum, ['title' => 'Scarf']);
+
+    giftsPage($user, $occasion)
+        ->assertSeeHtml('data-private="yes"')
+        ->assertSeeHtml('data-private="no"')
+        ->assertSee('Private');
+});
+
+it('shows what I have spent on my private gifts', function () {
+    $user = User::factory()->create();
+    $occasion = christmasFor($user);
+    $mum = personFor($occasion, 'Mum');
+    privateGiftFor($user, $occasion, $mum, ['price_cents' => 4000, 'status' => GiftStatus::Bought, 'purchased_by_user_id' => $user->id]);
+
+    giftsPage($user, $occasion)->assertSeeHtml('data-my-private-spent="$40"');
+});
+
+it('shows my private gifts line even when they are all still ideas', function () {
+    $user = User::factory()->create();
+    $occasion = christmasFor($user);
+    $mum = personFor($occasion, 'Mum');
+    privateGiftFor($user, $occasion, $mum, ['price_cents' => 4000]);
+
+    giftsPage($user, $occasion)->assertSeeHtml('data-my-private-spent="$0"');
+});
+
+it('shows my partner nothing about my private gifts on the occasion page', function () {
+    $user = User::factory()->create();
+    $partner = User::factory()->create(['household_id' => $user->household_id]);
+    $occasion = christmasFor($user);
+    $mum = personFor($occasion, 'Mum');
+    privateGiftFor($user, $occasion, $mum, ['title' => 'Surprise', 'store' => 'Sephora', 'price_cents' => 4000, 'status' => GiftStatus::Bought, 'purchased_by_user_id' => $user->id]);
+
+    giftsPage($partner, $occasion)
+        ->assertDontSee(['Surprise', 'Sephora', '$40', 'My private gifts'])
+        ->assertDontSeeHtml('data-my-private-spent');
+});
+
+it('shows both of us the same shared spent and remaining', function () {
+    $user = User::factory()->create();
+    $partner = User::factory()->create(['household_id' => $user->household_id]);
+    $occasion = christmasFor($user);
+    $mum = personFor($occasion, 'Mum');
+    giftFor($user, $occasion, $mum, ['price_cents' => 1000, 'status' => GiftStatus::Bought, 'purchased_by_user_id' => $user->id]);
+    privateGiftFor($user, $occasion, $mum, ['price_cents' => 4000, 'status' => GiftStatus::Bought, 'purchased_by_user_id' => $user->id]);
+
+    foreach ([$user, $partner] as $viewer) {
+        giftsPage($viewer, $occasion)->assertSeeHtml('data-total-spent="$10"');
+    }
+});
+
+it('hides the private checkbox when I edit my partner\'s gift', function () {
+    $user = User::factory()->create();
+    $partner = User::factory()->create(['household_id' => $user->household_id]);
+    $occasion = christmasFor($user);
+    $mum = personFor($occasion, 'Mum');
+    $gift = giftFor($partner, $occasion, $mum);
+
+    giftsPage($user, $occasion)
+        ->call('editGift', $gift->id)
+        ->assertDontSee('Private (only you can see it)');
+});

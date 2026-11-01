@@ -253,3 +253,88 @@ expect()->extend('toShowWrapped', function (int $wrapped, int $of) {
 
     return $this;
 });
+
+/**
+ * Exactly these gifts are marked private on the occasion page, with a "Private" badge on their row, e.g. ['Sam' => ['Diving watch']];
+ * every other gift is marked as not private and has no badge.
+ */
+expect()->extend('toShowPrivateGifts', function (array $privateByPerson) {
+    expect($this->value)->toBeInstanceOf(SeenOccasion::class);
+
+    $seen = [];
+    foreach ($this->value->giftPrivacy as $person => $gifts) {
+        foreach ($gifts as $i => $gift) {
+            expect($gift['private'])->toBeIn(['yes', 'no'], "{$gift['title']} for {$person} is not marked private or not private");
+
+            $isPrivate = $gift['private'] === 'yes';
+            $text = $this->value->giftProgress[$person][$i]['text'];
+
+            expect((bool) preg_match('/\bPrivate\b/', $text))->toBe($isPrivate, "{$gift['title']} for {$person}: Private badge should be ".($isPrivate ? 'shown' : 'absent'));
+
+            if ($isPrivate) {
+                $seen[$person][] = $gift['title'];
+            }
+        }
+    }
+
+    expect($seen)->toBe($privateByPerson);
+
+    return $this;
+});
+
+/**
+ * The occasion's header reads "My private gifts: $X spent" with exactly this amount; null means there is no such line at all.
+ */
+expect()->extend('toShowMyPrivateGiftsSpent', function (?string $amount) {
+    expect($this->value)->toBeInstanceOf(SeenOccasion::class)
+        ->and($this->value->myPrivateSpent)->toBe($amount);
+
+    if ($amount === null) {
+        expect(html_entity_decode(strip_tags($this->value->html), ENT_QUOTES))->not->toContain('My private gifts');
+    } else {
+        expect($this->value->myPrivateText)->toBe("My private gifts: {$amount} spent");
+    }
+
+    return $this;
+});
+
+/**
+ * Exactly these rows of the shopping list or wrapping checklist are marked private with a "Private" badge, each [who it is for, title];
+ * every other row is marked as not private and has no badge.
+ */
+expect()->extend('toBadgeAsPrivate', function (array $rows) {
+    expect($this->value instanceof SeenShoppingList || $this->value instanceof SeenWrappingChecklist)->toBeTrue();
+
+    $seen = [];
+    foreach ($this->value->privacy as $row) {
+        expect($row['private'])->toBeIn(['yes', 'no'], "{$row['title']} for {$row['for']} is not marked private or not private");
+
+        $isPrivate = $row['private'] === 'yes';
+
+        expect((bool) preg_match('/\bPrivate\b/', $row['text']))->toBe($isPrivate, "{$row['title']} for {$row['for']}: Private badge should be ".($isPrivate ? 'shown' : 'absent'));
+
+        if ($isPrivate) {
+            $seen[] = [$row['for'], $row['title']];
+        }
+    }
+
+    expect($seen)->toBe($rows);
+
+    return $this;
+});
+
+/**
+ * Nothing the page sends to my browser (text, attributes, hidden windows or page state) mentions any of these words, ignoring case.
+ */
+expect()->extend('toShowNoTraceOf', function (string ...$words) {
+    expect($this->value instanceof SeenOccasion || $this->value instanceof SeenShoppingList || $this->value instanceof SeenWrappingChecklist)->toBeTrue()
+        ->and($this->value->html)->not->toBe('');
+
+    $page = mb_strtolower(html_entity_decode(stripslashes($this->value->html), ENT_QUOTES | ENT_HTML5));
+
+    foreach ($words as $word) {
+        expect(str_contains($page, mb_strtolower($word)))->toBeFalse("The page shows a trace of \"{$word}\"");
+    }
+
+    return $this;
+});

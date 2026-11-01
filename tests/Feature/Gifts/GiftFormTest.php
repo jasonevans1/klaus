@@ -147,3 +147,48 @@ it('goes back to Idea with no buyer when getting ready for the next gift', funct
         ->assertSet('form.status', 'idea')
         ->assertSet('form.buyerId', '');
 });
+
+it('starts a new gift form as not private', function () {
+    Livewire::test(GiftFormHost::class)
+        ->assertSet('form.isPrivate', false)
+        ->assertSet('form.canSetPrivate', true);
+});
+
+it('passes the private flag on with the gift details', function () {
+    $component = giftForm(['form.isPrivate' => true]);
+
+    $form = new GiftForm($component->instance(), 'form');
+    $form->fill($component->get('form'));
+
+    expect($form->data())->toMatchArray(['is_private' => true]);
+
+    $form->fill(['isPrivate' => false]);
+    expect($form->data())->toMatchArray(['is_private' => false]);
+});
+
+it('fills the private flag from an existing gift', function () {
+    $user = User::factory()->create();
+    $gift = Gift::factory()->private($user)->create();
+
+    Livewire::test(GiftFormHost::class)
+        ->call('load', $gift->id)
+        ->assertSet('form.isPrivate', true);
+});
+
+it('only offers the private choice on gifts I added', function () {
+    $user = User::factory()->create();
+    $partner = User::factory()->forHousehold($user->household)->create();
+    $mine = Gift::factory()->create(['household_id' => $user->household_id, 'created_by_user_id' => $user->id]);
+    $theirs = Gift::factory()->create(['household_id' => $user->household_id, 'created_by_user_id' => $partner->id]);
+
+    $this->actingAs($user);
+
+    Livewire::test(GiftFormHost::class)
+        ->call('load', $theirs->id)
+        ->assertSet('form.canSetPrivate', false)
+        ->call('load', $mine->id)
+        ->assertSet('form.canSetPrivate', true)
+        ->call('load', $theirs->id)
+        ->call('next')
+        ->assertSet('form.canSetPrivate', true);
+});

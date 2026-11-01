@@ -62,6 +62,11 @@ class GiftFactory extends Factory
         return $this->purchased(GiftStatus::Given, $buyer);
     }
 
+    public function private(User $owner): static
+    {
+        return $this->state(['is_private' => true, 'created_by_user_id' => $owner->id]);
+    }
+
     private function purchased(GiftStatus $status, User $buyer): static
     {
         return $this->state(['status' => $status, 'purchased_by_user_id' => $buyer->id]);

@@ -50,10 +50,13 @@ new class extends Component
     </div>
 
     @forelse ($this->gifts as $gift)
-        <div wire:key="wrap-{{ $gift->id }}" data-wrap="{{ $gift->title }}" data-for="{{ $gift->recipient->name }}" data-wrapped="{{ $gift->status === GiftStatus::Wrapped ? 'yes' : 'no' }}" class="flex items-center gap-4">
+        <div wire:key="wrap-{{ $gift->id }}" data-wrap="{{ $gift->title }}" data-for="{{ $gift->recipient->name }}" data-wrapped="{{ $gift->status === GiftStatus::Wrapped ? 'yes' : 'no' }}" data-private="{{ $gift->is_private ? 'yes' : 'no' }}" class="flex items-center gap-4">
             <flux:checkbox wire:key="wrap-check-{{ $gift->id }}-{{ $gift->status->value }}" :checked="$gift->status === GiftStatus::Wrapped" wire:click="setWrapped({{ $gift->id }}, {{ $gift->status === GiftStatus::Wrapped ? 'false' : 'true' }})" aria-label="{{ __('Wrapped: :title for :name', ['title' => $gift->title, 'name' => $gift->recipient->name]) }}" data-test="wrap-checkbox" />
             <flux:text variant="strong">{{ $gift->title }}</flux:text>
             <flux:text size="sm">{{ $gift->recipient->name }}</flux:text>
+            @if ($gift->is_private)
+                <flux:badge size="sm" color="purple">{{ __('Private') }}</flux:badge>
+            @endif
         </div>
     @empty
         <flux:text>{{ __('Nothing to wrap yet.') }}</flux:text>

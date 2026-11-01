@@ -29,6 +29,11 @@ class GiftForm extends Form
 
     public string $buyerId = '';
 
+    public bool $isPrivate = false;
+
+    // UI hint only; UpdateGift enforces who may change the flag.
+    public bool $canSetPrivate = true;
+
     /**
      * @return array<string, mixed>
      */
@@ -41,6 +46,7 @@ class GiftForm extends Form
             'url' => ['nullable', 'url:http,https', 'max:2048'],
             'status' => ['required', Rule::enum(GiftStatus::class)],
             'buyerId' => ['nullable', Rule::exists('users', 'id')->where('household_id', Auth::user()?->household_id)],
+            'isPrivate' => ['boolean'],
         ];
     }
 
@@ -54,12 +60,14 @@ class GiftForm extends Form
         $this->url = $gift->url ?? '';
         $this->status = $gift->status->value;
         $this->buyerId = (string) ($gift->purchased_by_user_id ?? '');
+        $this->isPrivate = $gift->is_private;
+        $this->canSetPrivate = $gift->created_by_user_id === Auth::id();
     }
 
     /**
      * Normalised input for the gift Actions. Does not validate.
      *
-     * @return array{title: string, price_cents: int|null, store: string|null, url: string|null, status: GiftStatus, purchased_by_user_id: int|null}
+     * @return array{title: string, price_cents: int|null, store: string|null, url: string|null, status: GiftStatus, purchased_by_user_id: int|null, is_private: bool}
      */
     public function data(): array
     {
@@ -70,6 +78,7 @@ class GiftForm extends Form
             'url' => trim($this->url) ?: null,
             'status' => GiftStatus::from($this->status),
             'purchased_by_user_id' => $this->buyerId === '' ? null : (int) $this->buyerId,
+            'is_private' => $this->isPrivate,
         ];
     }
 

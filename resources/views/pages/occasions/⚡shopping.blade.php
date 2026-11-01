@@ -52,7 +52,7 @@ new class extends Component
     </div>
 
     @forelse ($this->ideas as $gift)
-        <div wire:key="idea-{{ $gift->id }}" data-idea="{{ $gift->title }}" data-for="{{ $gift->recipient->name }}" data-price="{{ Price::format($gift->price_cents) }}" data-store="{{ $gift->store }}" data-url="{{ $gift->url }}" class="flex items-center gap-4">
+        <div wire:key="idea-{{ $gift->id }}" data-idea="{{ $gift->title }}" data-for="{{ $gift->recipient->name }}" data-price="{{ Price::format($gift->price_cents) }}" data-store="{{ $gift->store }}" data-url="{{ $gift->url }}" data-private="{{ $gift->is_private ? 'yes' : 'no' }}" class="flex items-center gap-4">
             @if ($gift->url)
                 <a href="{{ $gift->url }}" target="_blank" rel="noopener noreferrer" class="underline">{{ $gift->title }}</a>
             @else
@@ -62,6 +62,9 @@ new class extends Component
             <flux:text size="sm">{{ Price::format($gift->price_cents) }}</flux:text>
             @if ($gift->store)
                 <flux:text size="sm">{{ $gift->store }}</flux:text>
+            @endif
+            @if ($gift->is_private)
+                <flux:badge size="sm" color="purple">{{ __('Private') }}</flux:badge>
             @endif
             <flux:button size="xs" wire:click="markBought({{ $gift->id }})" data-test="mark-bought-button">{{ __('Mark bought') }}</flux:button>
         </div>
