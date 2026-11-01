@@ -10,6 +10,7 @@ use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Testing\Fakes\NotificationFake;
+use Livewire\Exceptions\ComponentNotFoundException;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 
@@ -441,6 +442,24 @@ final class Member
         auth()->logout();
 
         return SeenIdeaList::read($html);
+    }
+
+    /**
+     * What the person's own page shows me: their profile, their year-round ideas and what they got on each occasion, by year.
+     */
+    public function personPage(string $name): SeenPersonPage
+    {
+        try {
+            $html = Livewire::actingAs($this->user)
+                ->test('pages::people.show', ['person' => $this->personId($name)])
+                ->html();
+        } catch (ComponentNotFoundException) {
+            throw new LogicException('Not implemented yet: the person page, with profile and ideas (task 002) and history (task 003)');
+        } finally {
+            auth()->logout();
+        }
+
+        return SeenPersonPage::read($html);
     }
 
     /**
@@ -1423,4 +1442,89 @@ function listPrivacy(DOMXPath $xpath, string $titleAttribute): array
     }
 
     return $rows;
+}
+
+/**
+ * A person's page as I see it: their profile, their year-round ideas, and their history
+ * (year => occasion name => gifts, each in the order shown), plus whether each idea and gift is marked private.
+ */
+final class SeenPersonPage
+{
+    /**
+     * @param  list<array{string, string, string}>  $ideas  each [title, price, store]
+     * @param  array<int, array<string, list<array{string, string, string, string}>>>  $history  each gift [title, price, status, who bought it]
+     * @param  list<array{kind: string, title: string, private: string, text: string}>  $privacy  kind is "idea" or "gift"
+     */
+    public function __construct(
+        public readonly string $name,
+        public readonly ?string $birthday,
+        public readonly ?int $age,
+        public readonly string $interests,
+        public readonly array $ideas,
+        public readonly array $history,
+        public readonly array $privacy,
+        public readonly string $html,
+    ) {}
+
+    public static function read(string $html): self
+    {
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+        $xpath = new DOMXPath($dom);
+
+        // A profile detail is shown in the element marked with it; its value is the attribute or, if that is empty, the element's text.
+        $detail = function (string $attribute) use ($xpath): ?string {
+            $element = $xpath->query('//*[@'.$attribute.']')->item(0);
+            if ($element === null) {
+                return null;
+            }
+
+            $value = trim($element->getAttribute($attribute));
+
+            return $value !== '' ? $value : trim($element->textContent);
+        };
+
+        $text = fn (DOMNode $node): string => trim((string) preg_replace('/\s+/', ' ', $node->textContent));
+
+        $age = $detail('data-profile-age');
+
+        $ideas = $privacy = [];
+        foreach ($xpath->query('//*[@data-idea]') as $idea) {
+            $ideas[] = [$idea->getAttribute('data-idea'), $idea->getAttribute('data-price'), $idea->getAttribute('data-store')];
+            $privacy[] = ['kind' => 'idea', 'title' => $idea->getAttribute('data-idea'), 'private' => $idea->getAttribute('data-private'), 'text' => $text($idea)];
+        }
+
+        $history = [];
+        foreach ($xpath->query('//*[@data-year]') as $year) {
+            $history[(int) $year->getAttribute('data-year')] = [];
+
+            foreach ($xpath->query('.//*[@data-history-occasion]', $year) as $occasion) {
+                $gifts = [];
+                foreach ($xpath->query('.//*[@data-history-gift]', $occasion) as $gift) {
+                    $gifts[] = [
+                        $gift->getAttribute('data-history-gift'),
+                        $gift->getAttribute('data-price'),
+                        $gift->getAttribute('data-status'),
+                        $gift->getAttribute('data-buyer'),
+                    ];
+                    $privacy[] = ['kind' => 'gift', 'title' => $gift->getAttribute('data-history-gift'), 'private' => $gift->getAttribute('data-private'), 'text' => $text($gift)];
+                }
+
+                $history[(int) $year->getAttribute('data-year')][$occasion->getAttribute('data-history-occasion')] = $gifts;
+            }
+        }
+
+        $heading = $xpath->query('//*[@data-flux-heading]')->item(0);
+
+        return new self(
+            $heading === null ? '' : $text($heading),
+            $detail('data-profile-birthday'),
+            $age === null || $age === '' ? null : (int) $age,
+            $detail('data-profile-interests') ?? '',
+            $ideas,
+            $history,
+            $privacy,
+            $html,
+        );
+    }
 }

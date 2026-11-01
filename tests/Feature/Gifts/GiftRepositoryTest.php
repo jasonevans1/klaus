@@ -307,3 +307,63 @@ it('leaves my partner\'s private ideas out of my year-round ideas but includes m
 
     expect(gifts()->yearRoundIdeas($user)[$ann->id]->pluck('id')->all())->toBe([$shared->id, $mine->id]);
 });
+
+function historySetup(): array
+{
+    $user = User::factory()->create();
+    $ann = Recipient::factory()->create(['household_id' => $user->household_id]);
+
+    return [$user, $ann];
+}
+
+it('lists a person\'s bought, wrapped and given gifts on occasions, newest occasion first', function () {
+    [$user, $ann] = historySetup();
+    $older = Occasion::factory()->forHousehold($user->household)->christmas(2024)->create();
+    $newer = Occasion::factory()->forHousehold($user->household)->christmas(2025)->create();
+    $given = Gift::factory()->forPersonOn($ann, $older)->given($user)->create();
+    $bought = Gift::factory()->forPersonOn($ann, $newer)->bought($user)->create();
+    $wrapped = Gift::factory()->forPersonOn($ann, $newer)->wrapped($user)->create();
+
+    $history = gifts()->historyFor($user, $ann);
+
+    expect($history->pluck('id')->all())->toBe([$bought->id, $wrapped->id, $given->id])
+        ->and($history->first()->relationLoaded('occasion'))->toBeTrue()
+        ->and($history->first()->relationLoaded('purchasedBy'))->toBeTrue();
+});
+
+it('leaves out ideas that were never bought', function () {
+    [$user, $ann] = historySetup();
+    $occasion = Occasion::factory()->forHousehold($user->household)->create();
+    Gift::factory()->forPersonOn($ann, $occasion)->create();
+    $bought = Gift::factory()->forPersonOn($ann, $occasion)->bought($user)->create();
+
+    expect(gifts()->historyFor($user, $ann)->pluck('id')->all())->toBe([$bought->id]);
+});
+
+it('leaves out year-round ideas', function () {
+    [$user, $ann] = historySetup();
+    Gift::factory()->yearRound()->create(['household_id' => $user->household_id, 'recipient_id' => $ann->id, 'status' => GiftStatus::Bought]);
+
+    expect(gifts()->historyFor($user, $ann))->toBeEmpty();
+});
+
+it('leaves out other people\'s gifts', function () {
+    [$user, $ann] = historySetup();
+    $bob = Recipient::factory()->create(['household_id' => $user->household_id]);
+    $occasion = Occasion::factory()->forHousehold($user->household)->create();
+    $mine = Gift::factory()->forPersonOn($ann, $occasion)->bought($user)->create();
+    Gift::factory()->forPersonOn($bob, $occasion)->bought($user)->create();
+
+    expect(gifts()->historyFor($user, $ann)->pluck('id')->all())->toBe([$mine->id]);
+});
+
+it('leaves out my partner\'s private gifts but includes mine', function () {
+    [$me, $ann] = historySetup();
+    $partner = User::factory()->create(['household_id' => $me->household_id]);
+    $occasion = Occasion::factory()->forHousehold($me->household)->create();
+    $shared = Gift::factory()->forPersonOn($ann, $occasion)->bought($me)->create();
+    $mine = Gift::factory()->forPersonOn($ann, $occasion)->bought($me)->private($me)->create();
+    Gift::factory()->forPersonOn($ann, $occasion)->bought($partner)->private($partner)->create();
+
+    expect(gifts()->historyFor($me, $ann)->pluck('id')->all())->toBe([$shared->id, $mine->id]);
+});

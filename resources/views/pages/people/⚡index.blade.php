@@ -104,7 +104,7 @@ new #[Title('People')] class extends Component {
                     class="flex items-center justify-between gap-4">
                     <div>
                         <div class="flex items-center gap-2">
-                            <flux:text variant="strong">{{ $person->name }}</flux:text>
+                            <flux:text variant="strong"><a href="{{ route('people.show', $person) }}" wire:navigate>{{ $person->name }}</a></flux:text>
                             @if ($person->is_shared)
                                 <flux:badge size="sm">{{ __('Shared') }}</flux:badge>
                             @endif
