@@ -490,6 +490,21 @@ final class Member
     }
 
     /**
+     * Log in and read the reminders on the dashboard where login lands: upcoming birthdays and occasions with people who have no gift yet.
+     */
+    public function dashboard(): SeenDashboard
+    {
+        test()->post(route('login.store'), ['email' => $this->user->email, 'password' => 'password']);
+
+        $html = (string) test()->get(route('dashboard'))->assertOk()->getContent();
+
+        test()->post(route('logout'));
+        test()->assertGuest();
+
+        return SeenDashboard::read($html);
+    }
+
+    /**
      * Click "Add to this occasion" on the person's year-round idea called $title on the occasion page.
      */
     public function addsIdeaTo(string $occasion, string $for, string $title): void
@@ -1578,4 +1593,49 @@ final class NewChristmasDialog
         public readonly ?string $copyNote,
         public readonly ?string $refusal,
     ) {}
+}
+
+/**
+ * The reminders on my dashboard as I see them after logging in, in the order shown.
+ */
+final class SeenDashboard
+{
+    /**
+     * @param  array<string, int>  $birthdays  person name => days until their birthday (0 = today)
+     * @param  list<string>  $birthdaysWithNoGift  people whose birthday reminder says "no gift yet"
+     * @param  array<string, list<string>>  $noGift  occasion name => the people listed with no gift yet
+     */
+    public function __construct(
+        public readonly array $birthdays,
+        public readonly array $birthdaysWithNoGift,
+        public readonly array $noGift,
+        public readonly bool $allCaughtUp,
+        public readonly string $html,
+    ) {}
+
+    public static function read(string $html): self
+    {
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+        $xpath = new DOMXPath($dom);
+
+        $birthdays = [];
+        $flagged = [];
+        foreach ($xpath->query('//*[@data-reminder-birthday]') as $row) {
+            $name = $row->getAttribute('data-reminder-birthday');
+            $birthdays[$name] = (int) $row->getAttribute('data-days');
+
+            if ($row->hasAttribute('data-needs-gift')) {
+                $flagged[] = $name;
+            }
+        }
+
+        $noGift = [];
+        foreach ($xpath->query('//*[@data-reminder-no-gift]') as $row) {
+            $people = $row->getAttribute('data-people');
+            $noGift[$row->getAttribute('data-reminder-no-gift')] = $people === '' ? [] : explode(', ', $people);
+        }
+
+        return new self($birthdays, $flagged, $noGift, $xpath->query('//*[@data-all-caught-up]')->length > 0, $html);
+    }
 }

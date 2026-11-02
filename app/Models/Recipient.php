@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\RecipientGroup;
+use Carbon\CarbonImmutable;
 use Database\Factories\RecipientFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -102,5 +103,25 @@ class Recipient extends Model
         }
 
         return (int) Carbon::create($this->birthday_year, $this->birthday_month, $this->birthday_day)->diffInYears(now());
+    }
+
+    public function nextBirthday(CarbonImmutable $today): ?CarbonImmutable
+    {
+        if ($this->birthday_month === null || $this->birthday_day === null) {
+            return null;
+        }
+
+        $date = $this->birthdayIn($today->year);
+
+        return $date->lessThan($today->startOfDay()) ? $this->birthdayIn($today->year + 1) : $date;
+    }
+
+    private function birthdayIn(int $year): CarbonImmutable
+    {
+        assert($this->birthday_month !== null && $this->birthday_day !== null);
+
+        $day = checkdate($this->birthday_month, $this->birthday_day, $year) ? $this->birthday_day : 28;
+
+        return CarbonImmutable::create($year, $this->birthday_month, $day);
     }
 }

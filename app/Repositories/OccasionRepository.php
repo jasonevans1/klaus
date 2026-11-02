@@ -8,6 +8,7 @@ use App\Enums\OccasionType;
 use App\Models\Occasion;
 use App\Models\Recipient;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 
 class OccasionRepository
@@ -20,6 +21,19 @@ class OccasionRepository
     public function listForUser(User $user): Collection
     {
         return Occasion::query()->withCount(['gifts' => fn ($query) => $query->visibleTo($user)])->where('household_id', $user->household_id)->orderByDesc('date')->get();
+    }
+
+    /**
+     * @return Collection<int, Occasion>
+     */
+    public function upcoming(User $user, CarbonImmutable $today, int $days): Collection
+    {
+        return Occasion::query()
+            ->where('household_id', $user->household_id)
+            ->whereDate('date', '>=', $today)
+            ->whereDate('date', '<=', $today->addDays($days))
+            ->orderBy('date')
+            ->get();
     }
 
     public function previousChristmas(User $user, ?int $before = null): ?Occasion
