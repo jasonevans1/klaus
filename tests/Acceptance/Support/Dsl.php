@@ -133,6 +133,32 @@ final class Member
     }
 
     /**
+     * Open "New Christmas" on the Occasions page and click Create without touching the year:
+     * reports the year the window had filled in, the note saying what it copies, and any refusal.
+     */
+    public function setsUpNextChristmas(): NewChristmasDialog
+    {
+        $page = Livewire::actingAs($this->user)->test('pages::occasions.index');
+
+        $year = $page->get('year');
+
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$page->html());
+        $note = (new DOMXPath($dom))->query('//*[@data-copies-from]')->item(0);
+
+        $page->call('createChristmas');
+        $refusal = $page->errors()->first('year');
+
+        auth()->logout();
+
+        return new NewChristmasDialog(
+            $year,
+            $note === null ? null : trim((string) preg_replace('/\s+/', ' ', $note->textContent)),
+            $refusal === '' ? null : $refusal,
+        );
+    }
+
+    /**
      * The names of my household's occasions, in the order the Occasions page lists them.
      *
      * @return list<string>
@@ -1540,4 +1566,16 @@ final class SeenPersonPage
             $html,
         );
     }
+}
+
+/**
+ * What the "New Christmas" window offered when I opened it, and what happened when I clicked Create straight away.
+ */
+final class NewChristmasDialog
+{
+    public function __construct(
+        public readonly int $year,
+        public readonly ?string $copyNote,
+        public readonly ?string $refusal,
+    ) {}
 }

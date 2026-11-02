@@ -82,3 +82,24 @@ it('offers only my non-archived people who are not already on the occasion', fun
 
     expect(occasions()->availablePeople($user, $occasion)->pluck('id')->all())->toBe([$amy->id, $zed->id]);
 });
+
+it('finds the latest christmas before a year, ignoring birthdays and other households', function () {
+    $user = User::factory()->create();
+    $person = Recipient::factory()->forHousehold($user->household)->create();
+    Occasion::factory()->forHousehold($user->household)->christmas(2023)->create();
+    $expected = Occasion::factory()->forHousehold($user->household)->christmas(2024)->create();
+    Occasion::factory()->forHousehold($user->household)->christmas(2026)->create();
+    Occasion::factory()->birthday($person, '2025-06-01')->create();
+    Occasion::factory()->christmas(2025)->create();
+
+    expect(occasions()->previousChristmas($user, 2026)->id)->toBe($expected->id)
+        ->and(occasions()->previousChristmas($user, 2023))->toBeNull();
+});
+
+it('finds the latest christmas when no year is given', function () {
+    $user = User::factory()->create();
+    Occasion::factory()->forHousehold($user->household)->christmas(2024)->create();
+    $latest = Occasion::factory()->forHousehold($user->household)->christmas(2026)->create();
+
+    expect(occasions()->previousChristmas($user)->id)->toBe($latest->id);
+});

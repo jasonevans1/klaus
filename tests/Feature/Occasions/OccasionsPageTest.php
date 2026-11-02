@@ -97,3 +97,49 @@ it('does not count my partner\'s private gifts in the occasion delete warning', 
     occasionsPage($partner)->assertSeeHtml('Delete Christmas 2026 and its 2 gifts?');
     occasionsPage($me)->assertSeeHtml('Delete Christmas 2026 and its 3 gifts?');
 });
+
+it('pre-fills the year after the latest Christmas', function () {
+    $user = User::factory()->create();
+    Occasion::factory()->forHousehold($user->household)->christmas(2026)->create();
+    Occasion::factory()->forHousehold($user->household)->christmas(2025)->create();
+
+    occasionsPage($user)->assertSet('year', 2027);
+});
+
+it('pre-fills this year when there is no Christmas yet', function () {
+    occasionsPage(User::factory()->create())->assertSet('year', now()->year);
+});
+
+it('pre-fills this year when the latest Christmas is more than a year ago', function () {
+    $user = User::factory()->create();
+    Occasion::factory()->forHousehold($user->household)->christmas(now()->year - 3)->create();
+
+    occasionsPage($user)->assertSet('year', now()->year);
+});
+
+it('says which Christmas the new one copies from', function () {
+    $user = User::factory()->create();
+    Occasion::factory()->forHousehold($user->household)->christmas(2026)->create();
+
+    occasionsPage($user)
+        ->assertSeeHtml('data-copies-from="Christmas 2026"')
+        ->assertSee('Copies people and budgets from Christmas 2026.');
+});
+
+it('updates the copy note when I change the year', function () {
+    $user = User::factory()->create();
+    Occasion::factory()->forHousehold($user->household)->christmas(2025)->create();
+    Occasion::factory()->forHousehold($user->household)->christmas(2026)->create();
+
+    occasionsPage($user)
+        ->assertSeeHtml('wire:model.live.blur="year"')
+        ->set('year', 2026)->assertSeeHtml('data-copies-from="Christmas 2025"')
+        ->set('year', 2025)->assertDontSeeHtml('data-copies-from');
+});
+
+it('shows no copy note and no error when I clear the year', function () {
+    $user = User::factory()->create();
+    Occasion::factory()->forHousehold($user->household)->christmas(2026)->create();
+
+    occasionsPage($user)->set('year', '')->assertOk()->assertDontSeeHtml('data-copies-from');
+});

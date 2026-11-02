@@ -2,6 +2,7 @@
 
 use App\Actions\Occasions\CreateChristmas;
 use App\Actions\Occasions\DeleteOccasion;
+use App\Models\Occasion;
 use App\Repositories\OccasionRepository;
 use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
@@ -11,12 +12,14 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
-new #[Title('Occasions')] class extends Component {
+new #[Title('Occasions')] class extends Component
+{
     public int $year;
 
     public function mount(): void
     {
-        $this->year = now()->year;
+        $latest = app(OccasionRepository::class)->previousChristmas(Auth::user())?->date->year;
+        $this->year = max(now()->year, ($latest ?? 0) + 1);
     }
 
     public function createChristmas(CreateChristmas $createChristmas): void
@@ -35,6 +38,12 @@ new #[Title('Occasions')] class extends Component {
 
         unset($this->occasions);
         Flux::toast(variant: 'success', text: __('Deleted :name.', ['name' => $occasion->name]));
+    }
+
+    #[Computed]
+    public function copiesFrom(): ?Occasion
+    {
+        return isset($this->year) ? app(OccasionRepository::class)->previousChristmas(Auth::user(), $this->year) : null;
     }
 
     /**
@@ -73,7 +82,10 @@ new #[Title('Occasions')] class extends Component {
     <flux:modal name="christmas" class="w-full max-w-sm">
         <form wire:submit="createChristmas" class="space-y-4">
             <flux:heading size="lg">{{ __('New Christmas') }}</flux:heading>
-            <flux:input type="number" wire:model="year" :label="__('Year')" />
+            <flux:input type="number" wire:model.live.blur="year" :label="__('Year')" />
+            @if ($this->copiesFrom)
+                <flux:text data-copies-from="{{ $this->copiesFrom->name }}">{{ __('Copies people and budgets from :name.', ['name' => $this->copiesFrom->name]) }}</flux:text>
+            @endif
             <div class="flex justify-end">
                 <flux:button type="submit" variant="primary" data-test="create-christmas-button">{{ __('Create') }}</flux:button>
             </div>

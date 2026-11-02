@@ -461,3 +461,16 @@ expect()->extend('toBadgeTheirPrivate', function (array $ideas, array $gifts) {
 
     return $this;
 });
+
+/**
+ * The "New Christmas" window had this year filled in and this note about what it copies (null: no note),
+ * and clicking Create made the Christmas without complaint.
+ */
+expect()->extend('toHaveCreatedChristmas', function (int $year, ?string $copyNote) {
+    expect($this->value)->toBeInstanceOf(NewChristmasDialog::class)
+        ->and($this->value->year)->toBe($year, 'The New Christmas window filled in the wrong year')
+        ->and($this->value->copyNote)->toBe($copyNote)
+        ->and($this->value->refusal)->toBeNull();
+
+    return $this;
+});
