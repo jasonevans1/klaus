@@ -96,7 +96,7 @@ Each feature is one HCF plan, small enough to build, test and deploy on its own.
   - Done when: I can see what someone got last Christmas.
 - [x] **13. Automatic birthdays** — Scheduled command creates each person's birthday occasion ahead of time, carrying last year's budget.
   - Done when: birthdays appear without me creating them.
-- [ ] **14. Start a new Christmas** — Create next Christmas from last year's, copying people and budgets.
+- [x] **14. Start a new Christmas** — Create next Christmas from last year's, copying people and budgets.
   - Done when: Christmas 2027 takes one click to set up.
 - [ ] **15. Reminder banners** — In-app banners for upcoming birthdays and people with no gift yet.
   - Done when: the banner tells me what needs attention when I log in.
