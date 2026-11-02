@@ -7,6 +7,7 @@ use App\Models\Occasion;
 use App\Models\Recipient;
 use App\Models\User;
 use Illuminate\Notifications\AnonymousNotifiable;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Testing\Fakes\NotificationFake;
@@ -836,6 +837,18 @@ function person(string $name): PersonEntry
 function itIs(string $date): void
 {
     test()->travelTo(Carbon\Carbon::parse($date));
+}
+
+/**
+ * Klaus's daily job runs overnight, as the scheduler does once a day, creating the birthdays coming up.
+ */
+function theDailyJobRuns(): void
+{
+    if (! array_key_exists('birthdays:create', Artisan::all())) {
+        throw new LogicException('Not implemented yet: the daily birthdays:create command (task 004)');
+    }
+
+    expect(Artisan::call('birthdays:create'))->toBe(0, 'The daily job failed');
 }
 
 /**

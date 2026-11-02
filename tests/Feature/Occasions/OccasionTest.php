@@ -69,3 +69,30 @@ it("removes an occasion's people and budgets when the occasion is deleted", func
     expect(DB::table('occasion_recipient')->count())->toBe(0)
         ->and(Recipient::find($anna->id))->not->toBeNull();
 });
+
+it('links a birthday occasion to its person', function () {
+    $anna = Recipient::factory()->create();
+    $occasion = Occasion::factory()->birthday($anna, '2026-12-03')->create();
+
+    expect($occasion->fresh()->birthdayRecipient->is($anna))->toBeTrue()
+        ->and($occasion->type)->toBe(OccasionType::Birthday)
+        ->and($occasion->household_id)->toBe($anna->household_id);
+});
+
+it('refuses a second birthday occasion for the same person on the same date', function () {
+    $anna = Recipient::factory()->create();
+    Occasion::factory()->birthday($anna, '2026-12-03')->create();
+
+    expect(fn () => Occasion::factory()->birthday($anna, '2026-12-03')->create())
+        ->toThrow(QueryException::class);
+});
+
+it('keeps the occasion but forgets the person when the person is deleted', function () {
+    $anna = Recipient::factory()->create();
+    $occasion = Occasion::factory()->birthday($anna, '2026-12-03')->create();
+
+    $anna->delete();
+
+    expect($occasion->fresh())->not->toBeNull()
+        ->and($occasion->fresh()->birthday_recipient_id)->toBeNull();
+});

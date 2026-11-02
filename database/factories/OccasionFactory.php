@@ -7,6 +7,7 @@ namespace Database\Factories;
 use App\Enums\OccasionType;
 use App\Models\Household;
 use App\Models\Occasion;
+use App\Models\Recipient;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -38,6 +39,17 @@ class OccasionFactory extends Factory
             'type' => OccasionType::Christmas,
             'name' => "Christmas $year",
             'date' => "$year-12-25",
+        ]);
+    }
+
+    public function birthday(Recipient $person, string $date): static
+    {
+        return $this->state([
+            'household_id' => $person->household_id,
+            'type' => OccasionType::Birthday,
+            'name' => "{$person->name}'s birthday ".substr($date, 0, 4),
+            'date' => $date,
+            'birthday_recipient_id' => $person->id,
         ]);
     }
 }
