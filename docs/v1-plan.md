@@ -92,7 +92,7 @@ Each feature is one HCF plan, small enough to build, test and deploy on its own.
   - Done when: my partner's view shows nothing about gifts I'm buying for them.
 - [x] **11. Idea list** — Add ideas to a person anytime with no occasion; assign an idea to an occasion later.
   - Done when: an idea added in March shows up when planning Christmas.
-- [ ] **12. Person page with history** — Profile with birthday and interests, ideas, and gifts from past occasions by year.
+- [x] **12. Person page with history** — Profile with birthday and interests, ideas, and gifts from past occasions by year.
   - Done when: I can see what someone got last Christmas.
 - [ ] **13. Automatic birthdays** — Scheduled command creates each person's birthday occasion ahead of time, carrying last year's budget.
   - Done when: birthdays appear without me creating them.
