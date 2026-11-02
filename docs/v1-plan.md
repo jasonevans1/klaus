@@ -94,7 +94,7 @@ Each feature is one HCF plan, small enough to build, test and deploy on its own.
   - Done when: an idea added in March shows up when planning Christmas.
 - [x] **12. Person page with history** — Profile with birthday and interests, ideas, and gifts from past occasions by year.
   - Done when: I can see what someone got last Christmas.
-- [ ] **13. Automatic birthdays** — Scheduled command creates each person's birthday occasion ahead of time, carrying last year's budget.
+- [x] **13. Automatic birthdays** — Scheduled command creates each person's birthday occasion ahead of time, carrying last year's budget.
   - Done when: birthdays appear without me creating them.
 - [ ] **14. Start a new Christmas** — Create next Christmas from last year's, copying people and budgets.
   - Done when: Christmas 2027 takes one click to set up.
