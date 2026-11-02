@@ -17,13 +17,9 @@ class CreateUpcomingBirthdays
         $created = 0;
 
         foreach (Recipient::query()->whereNull('archived_at')->whereNotNull('birthday_month')->whereNotNull('birthday_day')->get() as $recipient) {
-            $date = $this->birthdayIn($today->year, $recipient);
+            $date = $recipient->nextBirthday($today);
 
-            if ($date->lessThan($today->startOfDay())) {
-                $date = $this->birthdayIn($today->year + 1, $recipient);
-            }
-
-            if ($date->greaterThan($today->addDays(30)) || $recipient->last_birthday_year === $date->year) {
+            if ($date === null || $date->greaterThan($today->addDays(30)) || $recipient->last_birthday_year === $date->year) {
                 continue;
             }
 
@@ -51,13 +47,6 @@ class CreateUpcomingBirthdays
         }
 
         return $created;
-    }
-
-    private function birthdayIn(int $year, Recipient $recipient): CarbonImmutable
-    {
-        $day = checkdate($recipient->birthday_month, $recipient->birthday_day, $year) ? $recipient->birthday_day : 28;
-
-        return CarbonImmutable::create($year, $recipient->birthday_month, $day);
     }
 
     private function occasionName(string $name, int $year): string

@@ -327,7 +327,7 @@ expect()->extend('toBadgeAsPrivate', function (array $rows) {
  * Nothing the page sends to my browser (text, attributes, hidden windows or page state) mentions any of these words, ignoring case.
  */
 expect()->extend('toShowNoTraceOf', function (string ...$words) {
-    expect($this->value instanceof SeenOccasion || $this->value instanceof SeenShoppingList || $this->value instanceof SeenWrappingChecklist || $this->value instanceof SeenIdeaList || $this->value instanceof SeenPersonPage)->toBeTrue()
+    expect($this->value instanceof SeenOccasion || $this->value instanceof SeenShoppingList || $this->value instanceof SeenWrappingChecklist || $this->value instanceof SeenIdeaList || $this->value instanceof SeenPersonPage || $this->value instanceof SeenDashboard)->toBeTrue()
         ->and($this->value->html)->not->toBe('');
 
     $page = mb_strtolower(html_entity_decode(stripslashes($this->value->html), ENT_QUOTES | ENT_HTML5));
@@ -471,6 +471,67 @@ expect()->extend('toHaveCreatedChristmas', function (int $year, ?string $copyNot
         ->and($this->value->year)->toBe($year, 'The New Christmas window filled in the wrong year')
         ->and($this->value->copyNote)->toBe($copyNote)
         ->and($this->value->refusal)->toBeNull();
+
+    return $this;
+});
+
+/**
+ * The dashboard reminds me of exactly these birthdays, person name => days away (0 = today), in the order shown.
+ */
+expect()->extend('toRemindOfBirthdays', function (array $daysByPerson) {
+    expect($this->value)->toBeInstanceOf(SeenDashboard::class)
+        ->and($this->value->birthdays)->toBe($daysByPerson);
+
+    if ($daysByPerson !== []) {
+        expect($this->value->allCaughtUp)->toBeFalse('The dashboard says "All caught up." while there are reminders');
+    }
+
+    return $this;
+});
+
+/**
+ * Exactly these birthday reminders say "no gift yet", in the order shown.
+ */
+expect()->extend('toSayNoGiftYetForTheBirthdayOf', function (array $names) {
+    expect($this->value)->toBeInstanceOf(SeenDashboard::class)
+        ->and($this->value->birthdaysWithNoGift)->toBe($names);
+
+    return $this;
+});
+
+/**
+ * The dashboard lists exactly these occasions, in the order shown, each with exactly these people who have no gift yet
+ * (in any order), e.g. ['Christmas 2026' => ['Grandpa', 'Mum']].
+ */
+expect()->extend('toRemindOfPeopleWithNoGift', function (array $peopleByOccasion) {
+    expect($this->value)->toBeInstanceOf(SeenDashboard::class);
+
+    $sorted = function (array $byOccasion): array {
+        return array_map(function (array $people): array {
+            sort($people);
+
+            return $people;
+        }, $byOccasion);
+    };
+
+    expect(array_keys($this->value->noGift))->toBe(array_keys($peopleByOccasion))
+        ->and($sorted($this->value->noGift))->toBe($sorted($peopleByOccasion));
+
+    if ($peopleByOccasion !== []) {
+        expect($this->value->allCaughtUp)->toBeFalse('The dashboard says "All caught up." while there are reminders');
+    }
+
+    return $this;
+});
+
+/**
+ * The dashboard has no reminders at all and says "All caught up."
+ */
+expect()->extend('toSayAllCaughtUp', function () {
+    expect($this->value)->toBeInstanceOf(SeenDashboard::class)
+        ->and($this->value->birthdays)->toBe([], 'The dashboard still reminds me of birthdays')
+        ->and($this->value->noGift)->toBe([], 'The dashboard still lists people with no gift yet')
+        ->and($this->value->allCaughtUp)->toBeTrue('The dashboard does not say "All caught up."');
 
     return $this;
 });

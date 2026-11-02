@@ -45,4 +45,17 @@ class RecipientRepository
     {
         return Recipient::query()->where('household_id', $user->household_id)->findOrFail($id);
     }
+
+    /**
+     * @return Collection<int, Recipient>
+     */
+    public function withBirthdays(User $user): Collection
+    {
+        return Recipient::query()
+            ->where('household_id', $user->household_id)
+            ->whereNull('archived_at')
+            ->whereNotNull('birthday_month')
+            ->whereNotNull('birthday_day')
+            ->get();
+    }
 }

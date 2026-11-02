@@ -68,3 +68,13 @@ it('does not find another household\'s person', function () {
 
     repo()->findForUser($user, $other->id);
 })->throws(ModelNotFoundException::class);
+
+it('lists my non-archived people with a birthday', function () {
+    $user = User::factory()->create();
+    $kept = Recipient::factory()->forHousehold($user->household)->withBirthday(3, 4)->create();
+    Recipient::factory()->forHousehold($user->household)->create();
+    Recipient::factory()->forHousehold($user->household)->withBirthday(3, 4)->archived()->create();
+    Recipient::factory()->withBirthday(3, 4)->create();
+
+    expect(repo()->withBirthdays($user)->pluck('id')->all())->toBe([$kept->id]);
+});

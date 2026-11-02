@@ -6,6 +6,7 @@ use App\Models\Occasion;
 use App\Models\Recipient;
 use App\Models\User;
 use App\Repositories\OccasionRepository;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 function occasions(): OccasionRepository
@@ -102,4 +103,37 @@ it('finds the latest christmas when no year is given', function () {
     $latest = Occasion::factory()->forHousehold($user->household)->christmas(2026)->create();
 
     expect(occasions()->previousChristmas($user)->id)->toBe($latest->id);
+});
+
+it('lists occasions in the next days, soonest first', function () {
+    $user = User::factory()->create();
+    $later = Occasion::factory()->forHousehold($user->household)->create(['name' => 'Later', 'date' => '2026-11-20']);
+    $sooner = Occasion::factory()->forHousehold($user->household)->create(['name' => 'Sooner', 'date' => '2026-11-10']);
+
+    $upcoming = occasions()->upcoming($user, CarbonImmutable::parse('2026-11-01'), 30);
+
+    expect($upcoming->pluck('id')->all())->toBe([$sooner->id, $later->id]);
+});
+
+it('includes an occasion that is today', function () {
+    $user = User::factory()->create();
+    $today = Occasion::factory()->forHousehold($user->household)->create(['date' => '2026-11-01']);
+
+    expect(occasions()->upcoming($user, CarbonImmutable::parse('2026-11-01'), 30)->pluck('id')->all())->toBe([$today->id]);
+});
+
+it('leaves out past occasions and ones beyond the window', function () {
+    $user = User::factory()->create();
+    Occasion::factory()->forHousehold($user->household)->create(['date' => '2026-10-31']);
+    $edge = Occasion::factory()->forHousehold($user->household)->create(['date' => '2026-12-01']);
+    Occasion::factory()->forHousehold($user->household)->create(['date' => '2026-12-02']);
+
+    expect(occasions()->upcoming($user, CarbonImmutable::parse('2026-11-01'), 30)->pluck('id')->all())->toBe([$edge->id]);
+});
+
+it('leaves out another household\'s occasions', function () {
+    $user = User::factory()->create();
+    Occasion::factory()->create(['date' => '2026-11-10']);
+
+    expect(occasions()->upcoming($user, CarbonImmutable::parse('2026-11-01'), 30))->toBeEmpty();
 });
