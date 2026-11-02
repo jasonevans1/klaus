@@ -327,7 +327,7 @@ expect()->extend('toBadgeAsPrivate', function (array $rows) {
  * Nothing the page sends to my browser (text, attributes, hidden windows or page state) mentions any of these words, ignoring case.
  */
 expect()->extend('toShowNoTraceOf', function (string ...$words) {
-    expect($this->value instanceof SeenOccasion || $this->value instanceof SeenShoppingList || $this->value instanceof SeenWrappingChecklist || $this->value instanceof SeenIdeaList)->toBeTrue()
+    expect($this->value instanceof SeenOccasion || $this->value instanceof SeenShoppingList || $this->value instanceof SeenWrappingChecklist || $this->value instanceof SeenIdeaList || $this->value instanceof SeenPersonPage)->toBeTrue()
         ->and($this->value->html)->not->toBe('');
 
     $page = mb_strtolower(html_entity_decode(stripslashes($this->value->html), ENT_QUOTES | ENT_HTML5));
@@ -395,6 +395,69 @@ expect()->extend('toShowYearRoundIdeas', function (array $ideasByPerson) {
     }
 
     expect($seen)->toBe($ideasByPerson);
+
+    return $this;
+});
+
+/**
+ * The person's page is headed with their name and shows exactly this birthday (as on the People page, e.g. "May 14, 2019"),
+ * age and interests (line breaks kept).
+ */
+expect()->extend('toShowProfile', function (string $name, ?string $birthday, ?int $age, string $interests) {
+    expect($this->value)->toBeInstanceOf(SeenPersonPage::class)
+        ->and($this->value->name)->toBe($name)
+        ->and($this->value->birthday)->toBe($birthday)
+        ->and($this->value->age)->toBe($age)
+        ->and($this->value->interests)->toBe($interests);
+
+    return $this;
+});
+
+/**
+ * The person's page lists exactly these year-round ideas, each [title, price, store], in the order shown.
+ */
+expect()->extend('toShowTheirIdeas', function (array $ideas) {
+    expect($this->value)->toBeInstanceOf(SeenPersonPage::class)
+        ->and($this->value->ideas)->toBe($ideas);
+
+    return $this;
+});
+
+/**
+ * The person's history is exactly this: year => occasion name => the gifts they got, each [title, price, status, who bought it],
+ * years, occasions and gifts in the order shown, e.g. [2025 => ['Christmas 2025' => [['Dog bed', '$80', 'Given', 'Sam']]]].
+ */
+expect()->extend('toShowHistory', function (array $history) {
+    expect($this->value)->toBeInstanceOf(SeenPersonPage::class)
+        ->and($this->value->history)->toBe($history);
+
+    return $this;
+});
+
+/**
+ * Exactly these ideas and history gifts on the person's page are marked private, with a "Private" badge on their row;
+ * every other one is marked as not private and has no badge.
+ *
+ * @param  list<string>  $ideas
+ * @param  list<string>  $gifts
+ */
+expect()->extend('toBadgeTheirPrivate', function (array $ideas, array $gifts) {
+    expect($this->value)->toBeInstanceOf(SeenPersonPage::class);
+
+    $seen = ['idea' => [], 'gift' => []];
+    foreach ($this->value->privacy as $row) {
+        expect($row['private'])->toBeIn(['yes', 'no'], "{$row['title']} is not marked private or not private");
+
+        $isPrivate = $row['private'] === 'yes';
+
+        expect((bool) preg_match('/\bPrivate\b/', $row['text']))->toBe($isPrivate, "{$row['title']}: Private badge should be ".($isPrivate ? 'shown' : 'absent'));
+
+        if ($isPrivate) {
+            $seen[$row['kind']][] = $row['title'];
+        }
+    }
+
+    expect($seen)->toBe(['idea' => $ideas, 'gift' => $gifts]);
 
     return $this;
 });
