@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
+use App\Enums\OccasionType;
 use App\Models\Occasion;
 use App\Models\Recipient;
 use App\Models\User;
@@ -19,6 +20,16 @@ class OccasionRepository
     public function listForUser(User $user): Collection
     {
         return Occasion::query()->withCount(['gifts' => fn ($query) => $query->visibleTo($user)])->where('household_id', $user->household_id)->orderByDesc('date')->get();
+    }
+
+    public function previousChristmas(User $user, ?int $before = null): ?Occasion
+    {
+        return Occasion::query()
+            ->where('household_id', $user->household_id)
+            ->where('type', OccasionType::Christmas)
+            ->when($before !== null, fn ($query) => $query->whereYear('date', '<', $before))
+            ->orderByDesc('date')
+            ->first();
     }
 
     public function findForUser(User $user, int $id): Occasion
