@@ -43,3 +43,10 @@ it('deletes a household\'s people when the household is deleted', function () {
 
     expect(Recipient::count())->toBe(0);
 });
+
+it('stores the last year a birthday was created for a person', function () {
+    $recipient = Recipient::factory()->create();
+    $recipient->forceFill(['last_birthday_year' => 2026])->save();
+
+    expect($recipient->fresh()->last_birthday_year)->toBe(2026);
+});

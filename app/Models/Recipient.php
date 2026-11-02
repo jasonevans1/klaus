@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $birthday_month
  * @property int|null $birthday_day
  * @property int|null $birthday_year
+ * @property int|null $last_birthday_year
  * @property string|null $interests
  * @property Carbon|null $archived_at
  * @property Carbon|null $created_at
@@ -54,6 +55,7 @@ class Recipient extends Model
             'birthday_month' => 'integer',
             'birthday_day' => 'integer',
             'birthday_year' => 'integer',
+            'last_birthday_year' => 'integer',
             'archived_at' => 'datetime',
         ];
     }

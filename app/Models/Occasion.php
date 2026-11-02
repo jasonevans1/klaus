@@ -19,6 +19,7 @@ use Illuminate\Support\Carbon;
  * @property OccasionType $type
  * @property string $name
  * @property Carbon $date
+ * @property int|null $birthday_recipient_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Household $household
@@ -51,6 +52,14 @@ class Occasion extends Model
     public function household(): BelongsTo
     {
         return $this->belongsTo(Household::class);
+    }
+
+    /**
+     * @return BelongsTo<Recipient, $this>
+     */
+    public function birthdayRecipient(): BelongsTo
+    {
+        return $this->belongsTo(Recipient::class, 'birthday_recipient_id');
     }
 
     /**
