@@ -64,3 +64,12 @@ select:focus[data-flux-control] {
 /* \[:where(&)\]:size-4 {
     @apply size-4;
 } */
+
+/* Flux's danger button is red-500 in light mode, and white text on it is ~3.8:1. red-600 passes 4.5:1. */
+[data-flux-button].bg-red-500 {
+    background-color: var(--color-red-600);
+}
+
+[data-flux-button].bg-red-500:hover {
+    background-color: var(--color-red-700);
+}
