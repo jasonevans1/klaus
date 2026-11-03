@@ -577,6 +577,21 @@ final class Member
         return Occasion::where('household_id', $this->user->household_id)->where('name', $name)->firstOrFail()->id;
     }
 
+    /**
+     * Log in and read the logo and name at the top of the page login lands on.
+     */
+    public function homePage(): SeenBrand
+    {
+        test()->post(route('login.store'), ['email' => $this->user->email, 'password' => 'password']);
+
+        $html = (string) test()->get(route('dashboard'))->assertOk()->getContent();
+
+        test()->post(route('logout'));
+        test()->assertGuest();
+
+        return SeenBrand::read($html);
+    }
+
     public function personId(string $name): int
     {
         return Recipient::where('household_id', $this->user->household_id)->where('name', $name)->firstOrFail()->id;
@@ -1638,4 +1653,99 @@ final class SeenDashboard
 
         return new self($birthdays, $flagged, $noGift, $xpath->query('//*[@data-all-caught-up]')->length > 0, $html);
     }
+}
+
+/**
+ * The settings on the server (or a fresh checkout) still name the app $name.
+ */
+function theAppIsStillCalled(string $name): void
+{
+    config(['app.name' => $name]);
+}
+
+/**
+ * Read the logo and name at the top of the login page, as someone who is not logged in.
+ */
+function theLoginPage(): SeenBrand
+{
+    test()->assertGuest();
+
+    return SeenBrand::read((string) test()->get(route('login'))->assertOk()->getContent());
+}
+
+/**
+ * The brand at the top of a page: the first link on the page that holds a picture.
+ * name is the link's text (what a screen reader says), drawing is each line of the picture as [shape, fill].
+ */
+final class SeenBrand
+{
+    /**
+     * @param  list<array{string, string}>  $drawing
+     */
+    public function __construct(
+        public readonly string $name,
+        public readonly array $drawing,
+        public readonly string $html,
+    ) {}
+
+    public static function read(string $html): self
+    {
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+        $xpath = new DOMXPath($dom);
+
+        $link = $xpath->query('//a[.//*[local-name()="svg"]]')->item(0);
+        expect($link)->not->toBeNull('The page has no logo link');
+
+        $drawing = [];
+        foreach ($xpath->query('.//*[local-name()="svg"][1]//*[local-name()="path"]', $link) as $path) {
+            $drawing[] = [trim((string) preg_replace('/\s+/', ' ', $path->getAttribute('d'))), $path->getAttribute('fill')];
+        }
+
+        return new self(trim((string) preg_replace('/\s+/', ' ', $link->textContent)), $drawing, $html);
+    }
+}
+
+/**
+ * The icons a browser tab and a phone home screen pick up for Klaus.
+ * tabIconIcoSizes is the pixel size of each picture inside the old-style tab icon.
+ * homeScreenIconSize is [width, height] of the home screen icon.
+ */
+final class SeenAppIcons
+{
+    /**
+     * @param  list<int>  $tabIconIcoSizes
+     * @param  array{int, int}  $homeScreenIconSize
+     */
+    public function __construct(
+        public readonly string $tabIconSvg,
+        public readonly string $tabIconIcoFingerprint,
+        public readonly array $tabIconIcoSizes,
+        public readonly array $homeScreenIconSize,
+    ) {}
+}
+
+/**
+ * Read the browser tab icons and the phone home screen icon that Klaus ships.
+ */
+function theAppIcons(): SeenAppIcons
+{
+    $ico = (string) file_get_contents(public_path('favicon.ico'));
+    $count = (int) unpack('v', substr($ico, 4, 2))[1];
+
+    $sizes = [];
+    for ($i = 0; $i < $count; $i++) {
+        $width = ord($ico[6 + 16 * $i]);
+        $sizes[] = $width === 0 ? 256 : $width;
+    }
+
+    $png = getimagesize(public_path('apple-touch-icon.png'));
+    expect($png)->not->toBeFalse('The home screen icon is not a picture');
+
+    return new SeenAppIcons(
+        (string) file_get_contents(public_path('favicon.svg')),
+        sha1($ico),
+        $sizes,
+        [(int) $png[0], (int) $png[1]],
+    );
 }
