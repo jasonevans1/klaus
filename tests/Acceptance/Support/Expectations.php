@@ -535,3 +535,55 @@ expect()->extend('toSayAllCaughtUp', function () {
 
     return $this;
 });
+
+/**
+ * The two-loop Klaus bow, as drawn: two loops and two ribbon tails.
+ */
+const KLAUS_BOW = [
+    'M12 11C9 5 3 5 3.5 9.5S9 12 12 11z',
+    'M12 11c3-6 9-6 8.5-1.5S15 12 12 11z',
+    'M12 11l-3.5 9',
+    'M12 11l3.5 9',
+];
+
+/** A piece of the Laravel starter-kit logo. */
+const LARAVEL_MARK = 'M17.2 5.633';
+
+/** The fingerprint of the Laravel tab icon that came with the starter kit. */
+const LARAVEL_TAB_ICON_FINGERPRINT = '4de5db574e6c589ef763ce57c4061f2269648ca4';
+
+/**
+ * The page's brand is named exactly "Klaus" and its picture is the bow as an outline: exactly the bow's four lines,
+ * none of them filled in. No Laravel logo appears anywhere on the page.
+ */
+expect()->extend('toShowTheKlausLogo', function () {
+    expect($this->value)->toBeInstanceOf(SeenBrand::class);
+
+    expect($this->value->name)->toBe('Klaus', 'The brand is not named Klaus')
+        ->and(array_map(fn (array $line): string => $line[0], $this->value->drawing))->toBe(KLAUS_BOW, 'The logo is not the Klaus bow')
+        ->and(array_map(fn (array $line): string => $line[1], $this->value->drawing))->toBe(['none', 'none', 'none', 'none'], 'The bow is filled in instead of drawn as an outline')
+        ->and(str_contains($this->value->html, LARAVEL_MARK))->toBeFalse('The page still shows the Laravel logo');
+
+    return $this;
+});
+
+/**
+ * The browser tab icon draws the Klaus bow (and turns white on a dark tab bar) with no Laravel logo,
+ * the old-style tab icon is no longer the Laravel one and holds 16, 32 and 48 pixel pictures,
+ * and the phone home screen icon is 180 by 180.
+ */
+expect()->extend('toShowTheKlausBow', function () {
+    expect($this->value)->toBeInstanceOf(SeenAppIcons::class);
+
+    foreach (KLAUS_BOW as $line) {
+        expect(str_contains($this->value->tabIconSvg, $line))->toBeTrue("The tab icon is missing the bow line {$line}");
+    }
+
+    expect(str_contains($this->value->tabIconSvg, LARAVEL_MARK))->toBeFalse('The tab icon still shows the Laravel logo')
+        ->and(str_contains($this->value->tabIconSvg, 'prefers-color-scheme: dark'))->toBeTrue('The tab icon does not adapt to a dark tab bar')
+        ->and($this->value->tabIconIcoFingerprint)->not->toBe(LARAVEL_TAB_ICON_FINGERPRINT, 'The old-style tab icon is still the Laravel one')
+        ->and($this->value->tabIconIcoSizes)->toBe([16, 32, 48], 'The old-style tab icon does not hold 16, 32 and 48 pixel pictures')
+        ->and($this->value->homeScreenIconSize)->toBe([180, 180], 'The home screen icon is not 180 by 180');
+
+    return $this;
+});
