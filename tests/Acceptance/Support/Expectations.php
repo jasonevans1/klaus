@@ -587,3 +587,75 @@ expect()->extend('toShowTheKlausBow', function () {
 
     return $this;
 });
+
+/**
+ * The front page's browser tab reads exactly "Klaus", its one main headline is the Klaus pitch, and it says
+ * what Klaus is for: one list for the household, a shared budget, private gifts and birthday reminders.
+ * It follows the device's light or dark setting instead of starting dark.
+ */
+expect()->extend('toTellWhatKlausIsFor', function () {
+    expect($this->value)->toBeInstanceOf(SeenFrontPage::class);
+
+    expect($this->value->tabTitle)->toBe('Klaus', 'The browser tab does not read exactly "Klaus"')
+        ->and($this->value->headlines)->toBe(['Christmas and birthday gifts, planned together.'], 'The page does not have the Klaus headline as its one main heading');
+
+    foreach ([
+        'Klaus keeps one list for your household, so you never buy the same gift twice.',
+        'One shared budget',
+        "See what you've spent and what's left for each person.",
+        'Private gifts',
+        "Plan a surprise your partner can't see.",
+        'Birthday reminders',
+        'A heads-up before each birthday, so no one is missed.',
+    ] as $line) {
+        expect(str_contains($this->value->text, $line))->toBeTrue("The page does not say \"{$line}\"");
+    }
+
+    expect($this->value->darkByDefault)->toBeFalse('The page starts dark instead of following my light or dark setting');
+
+    return $this;
+});
+
+/**
+ * The front page has a "Log in" link to the login page and a "Get started" link to sign up and create a household,
+ * and every link with those words goes there.
+ */
+expect()->extend('toOfferToLogInOrCreateAHousehold', function () {
+    expect($this->value)->toBeInstanceOf(SeenFrontPage::class);
+
+    foreach (['Log in' => route('login'), 'Get started' => route('register')] as $words => $goesTo) {
+        $targets = array_values(array_map(
+            fn (array $link): string => $link[1],
+            array_filter($this->value->links, fn (array $link): bool => $link[0] === $words),
+        ));
+
+        expect($targets)->not->toBeEmpty("The page has no \"{$words}\" link")
+            ->and(array_unique($targets))->toBe([$goesTo], "\"{$words}\" does not take me to {$goesTo}");
+    }
+
+    return $this;
+});
+
+/**
+ * Nothing of the Laravel starter page is left: no "Laravel" anywhere on the page, no links to laravel.com
+ * and no "Let's get started".
+ */
+expect()->extend('toLeaveNothingOfTheLaravelStarterPage', function () {
+    expect($this->value)->toBeInstanceOf(SeenFrontPage::class);
+
+    expect(str_contains($this->value->text, 'Laravel'))->toBeFalse('The page still says "Laravel"')
+        ->and(str_contains($this->value->text, "Let's get started"))->toBeFalse('The page still says "Let\'s get started"')
+        ->and(array_filter($this->value->links, fn (array $link): bool => str_contains($link[1], 'laravel.com')))->toBe([], 'The page still links to laravel.com')
+        ->and(str_contains($this->value->html, LARAVEL_MARK))->toBeFalse('The page still shows the Laravel logo');
+
+    return $this;
+});
+
+/**
+ * Where I ended up is my dashboard.
+ */
+expect()->extend('toBeMyDashboard', function () {
+    expect($this->value)->toBe(route('dashboard'), 'I did not land on my dashboard');
+
+    return $this;
+});
