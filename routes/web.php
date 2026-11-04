@@ -3,7 +3,7 @@
 use App\Models\HouseholdInvitation;
 use Illuminate\Support\Facades\Route;
 
-Route::view('/', 'welcome')->name('home');
+Route::view('/', 'welcome')->middleware('guest')->name('home');
 
 Route::get('invitations/{token}', function (string $token) {
     return HouseholdInvitation::findPendingByToken($token)

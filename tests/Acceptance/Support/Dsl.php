@@ -578,6 +578,22 @@ final class Member
     }
 
     /**
+     * Log in, then open Klaus's front page and report the address I end up on.
+     */
+    public function opensKlaus(): string
+    {
+        test()->post(route('login.store'), ['email' => $this->user->email, 'password' => 'password']);
+
+        $response = test()->get(route('home'));
+        $landedOn = $response->isRedirect() ? (string) $response->headers->get('Location') : route('home');
+
+        test()->post(route('logout'));
+        test()->assertGuest();
+
+        return $landedOn;
+    }
+
+    /**
      * Log in and read the logo and name at the top of the page login lands on.
      */
     public function homePage(): SeenBrand
@@ -1748,4 +1764,72 @@ function theAppIcons(): SeenAppIcons
         $sizes,
         [(int) $png[0], (int) $png[1]],
     );
+}
+
+/**
+ * Klaus's front page as someone who is not logged in sees it.
+ * headlines are the page's main headings, text is everything on the page as read aloud (spaces collapsed),
+ * links are [text, address] for every link, darkByDefault is true when the page is forced dark before
+ * the device's light or dark setting is applied.
+ */
+final class SeenFrontPage
+{
+    /**
+     * @param  list<string>  $headlines
+     * @param  list<array{string, string}>  $links
+     */
+    public function __construct(
+        public readonly string $tabTitle,
+        public readonly array $headlines,
+        public readonly string $text,
+        public readonly array $links,
+        public readonly bool $darkByDefault,
+        public readonly string $html,
+    ) {}
+
+    public static function read(string $html): self
+    {
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+        $xpath = new DOMXPath($dom);
+        $clean = fn (string $text): string => trim((string) preg_replace('/\s+/', ' ', $text));
+
+        $headlines = [];
+        foreach ($xpath->query('//h1') as $h1) {
+            $headlines[] = $clean($h1->textContent);
+        }
+
+        $links = [];
+        foreach ($xpath->query('//a') as $a) {
+            $links[] = [$clean($a->textContent), $a->getAttribute('href')];
+        }
+
+        $body = $xpath->query('//body')->item(0);
+        $htmlClasses = preg_split('/\s+/', (string) $xpath->query('//html')->item(0)?->getAttribute('class')) ?: [];
+
+        return new self(
+            $clean((string) $xpath->query('//title')->item(0)?->textContent),
+            $headlines,
+            $clean((string) $body?->textContent),
+            $links,
+            in_array('dark', $htmlClasses, true),
+            $html,
+        );
+    }
+
+    /** The logo and name at the top of the page. */
+    public function brand(): SeenBrand
+    {
+        return SeenBrand::read($this->html);
+    }
+}
+
+/**
+ * Someone who is not logged in opens Klaus's front page.
+ */
+function aVisitorOpensKlaus(): SeenFrontPage
+{
+    test()->assertGuest();
+
+    return SeenFrontPage::read((string) test()->get(route('home'))->assertOk()->getContent());
 }
