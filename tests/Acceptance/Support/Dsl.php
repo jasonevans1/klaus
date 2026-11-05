@@ -1635,6 +1635,10 @@ final class SeenDashboard
      * @param  array<string, int>  $birthdays  person name => days until their birthday (0 = today)
      * @param  list<string>  $birthdaysWithNoGift  people whose birthday reminder says "no gift yet"
      * @param  array<string, list<string>>  $noGift  occasion name => the people listed with no gift yet
+     * @param  string|null  $christmas  the name of the Christmas on the Christmas card, or null when there is no card
+     * @param  string  $christmasText  everything the Christmas card says, as one line of text
+     * @param  array<string, list<string>>  $christmasLinks  link text on the Christmas card => where each such link goes (path)
+     * @param  array<string, string>  $comingUp  occasion name => what its "Coming up" row says, as one line of text, in the order shown
      */
     public function __construct(
         public readonly array $birthdays,
@@ -1642,6 +1646,10 @@ final class SeenDashboard
         public readonly array $noGift,
         public readonly bool $allCaughtUp,
         public readonly string $html,
+        public readonly ?string $christmas = null,
+        public readonly string $christmasText = '',
+        public readonly array $christmasLinks = [],
+        public readonly array $comingUp = [],
     ) {}
 
     public static function read(string $html): self
@@ -1667,7 +1675,37 @@ final class SeenDashboard
             $noGift[$row->getAttribute('data-reminder-no-gift')] = $people === '' ? [] : explode(', ', $people);
         }
 
-        return new self($birthdays, $flagged, $noGift, $xpath->query('//*[@data-all-caught-up]')->length > 0, $html);
+        $text = fn (DOMNode $node): string => trim((string) preg_replace('/\s+/u', ' ', $node->textContent));
+
+        $christmas = null;
+        $christmasText = '';
+        $christmasLinks = [];
+        $card = $xpath->query('//*[@data-christmas]')->item(0);
+        if ($card instanceof DOMElement) {
+            $christmas = $card->getAttribute('data-christmas');
+            $christmasText = $text($card);
+
+            foreach ($xpath->query('.//a[@href]', $card) as $link) {
+                $christmasLinks[$text($link)][] = (string) parse_url($link->getAttribute('href'), PHP_URL_PATH);
+            }
+        }
+
+        $comingUp = [];
+        foreach ($xpath->query('//*[@data-upcoming]') as $row) {
+            $comingUp[$row->getAttribute('data-upcoming')] = $text($row);
+        }
+
+        return new self(
+            $birthdays,
+            $flagged,
+            $noGift,
+            $xpath->query('//*[@data-all-caught-up]')->length > 0,
+            $html,
+            $christmas,
+            $christmasText,
+            $christmasLinks,
+            $comingUp,
+        );
     }
 }
 

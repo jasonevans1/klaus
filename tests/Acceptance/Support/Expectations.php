@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+use App\Models\Occasion;
 
 expect()->extend('toBeNamed', function (string $name) {
     expect($this->value)->toBeInstanceOf(SeenHousehold::class)
@@ -656,6 +657,97 @@ expect()->extend('toLeaveNothingOfTheLaravelStarterPage', function () {
  */
 expect()->extend('toBeMyDashboard', function () {
     expect($this->value)->toBe(route('dashboard'), 'I did not land on my dashboard');
+
+    return $this;
+});
+
+/**
+ * The dashboard's Christmas card is for exactly this Christmas and says its name, when it is (e.g. "in 51 days (Dec 25)")
+ * and what has been spent of the budget (e.g. "$135 of $130 spent").
+ */
+expect()->extend('toShowChristmasCard', function (string $name, string $when, string $money) {
+    expect($this->value)->toBeInstanceOf(SeenDashboard::class)
+        ->and($this->value->christmas)->toBe($name, 'The dashboard shows no card for this Christmas')
+        ->and($this->value->christmasText)->toContain($name)
+        ->and($this->value->christmasText)->toContain($when)
+        ->and($this->value->christmasText)->toContain($money);
+
+    return $this;
+});
+
+/**
+ * The Christmas card says "$X over" with exactly this amount; null means it says nothing about being over.
+ */
+expect()->extend('toShowChristmasOverBudgetBy', function (?string $amount) {
+    expect($this->value)->toBeInstanceOf(SeenDashboard::class)
+        ->and($this->value->christmas)->not->toBeNull('The dashboard shows no Christmas card');
+
+    preg_match_all('/(\$[\d,.]+) over\b/', $this->value->christmasText, $over);
+
+    expect($over[1])->toBe($amount === null ? [] : [$amount]);
+
+    return $this;
+});
+
+/**
+ * The Christmas card shows exactly these counts for every gift stage, e.g. ['Ideas' => 2, 'Bought' => 2, 'Wrapped' => 1, 'Given' => 0].
+ */
+expect()->extend('toCountChristmasGifts', function (array $counts) {
+    expect($this->value)->toBeInstanceOf(SeenDashboard::class)
+        ->and(array_keys($counts))->toBe(['Ideas', 'Bought', 'Wrapped', 'Given']);
+
+    foreach ($counts as $stage => $count) {
+        preg_match_all('/\b'.$stage.' (\d+)\b/', $this->value->christmasText, $found);
+
+        expect($found[1])->toBe([(string) $count], "The Christmas card should say \"{$stage} {$count}\" once");
+    }
+
+    return $this;
+});
+
+/**
+ * The Christmas card has a "Shopping list" link and a "Wrapping checklist" link, each going to that list for this occasion.
+ */
+expect()->extend('toOfferTheShoppingListAndWrappingChecklistOf', function (string $occasion) {
+    expect($this->value)->toBeInstanceOf(SeenDashboard::class);
+
+    $id = Occasion::where('name', $occasion)->sole()->getKey();
+
+    expect($this->value->christmasLinks['Shopping list'] ?? [])
+        ->toBe([(string) parse_url(route('occasions.shopping', $id), PHP_URL_PATH)], 'The Christmas card has no Shopping list link to this occasion')
+        ->and($this->value->christmasLinks['Wrapping checklist'] ?? [])
+        ->toBe([(string) parse_url(route('occasions.wrapping', $id), PHP_URL_PATH)], 'The Christmas card has no Wrapping checklist link to this occasion');
+
+    return $this;
+});
+
+/**
+ * The Christmas card says "My private gifts: $X spent" with exactly this amount; null means it has no such line.
+ */
+expect()->extend('toShowMyPrivateChristmasGiftsSpent', function (?string $amount) {
+    expect($this->value)->toBeInstanceOf(SeenDashboard::class)
+        ->and($this->value->christmas)->not->toBeNull('The dashboard shows no Christmas card');
+
+    if ($amount === null) {
+        expect($this->value->christmasText)->not->toContain('My private gifts');
+    } else {
+        expect($this->value->christmasText)->toContain("My private gifts: {$amount} spent");
+    }
+
+    return $this;
+});
+
+/**
+ * "Coming up" lists exactly these occasions in the order shown, each row saying when it is and what has been spent,
+ * e.g. ["Pluto's birthday 2026" => ['in 12 days (Dec 10)', '$25 of $50 spent']].
+ */
+expect()->extend('toListComingUp', function (array $occasions) {
+    expect($this->value)->toBeInstanceOf(SeenDashboard::class)
+        ->and(array_keys($this->value->comingUp))->toBe(array_keys($occasions));
+
+    foreach ($occasions as $name => [$when, $money]) {
+        expect($this->value->comingUp[$name])->toContain($name)->toContain($when)->toContain($money);
+    }
 
     return $this;
 });

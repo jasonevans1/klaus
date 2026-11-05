@@ -12,7 +12,7 @@ Route::get('invitations/{token}', function (string $token) {
 })->middleware('guest')->name('invitations.show');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::view('dashboard', 'dashboard')->name('dashboard');
+    Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
     Route::livewire('people', 'pages::people.index')->name('people.index');
     Route::livewire('people/{person}', 'pages::people.show')->whereNumber('person')->name('people.show');
     Route::livewire('ideas', 'pages::ideas.index')->name('ideas.index');
