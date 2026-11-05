@@ -3,7 +3,7 @@
     <head>
         @include('partials.head')
     </head>
-    <body class="min-h-screen bg-white antialiased dark:bg-zinc-800">
+    <body class="min-h-screen bg-snow antialiased dark:bg-zinc-800">
         <div class="mx-auto flex min-h-svh max-w-3xl flex-col gap-12 p-6">
             <header class="flex items-center justify-between">
                 <x-app-logo href="{{ route('home') }}" />
