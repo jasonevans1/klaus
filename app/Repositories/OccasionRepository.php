@@ -46,6 +46,16 @@ class OccasionRepository
             ->first();
     }
 
+    public function currentChristmas(User $user, CarbonImmutable $today): ?Occasion
+    {
+        $christmases = fn () => Occasion::query()
+            ->where('household_id', $user->household_id)
+            ->where('type', OccasionType::Christmas);
+
+        return $christmases()->whereDate('date', '>=', $today)->orderBy('date')->first()
+            ?? $christmases()->orderByDesc('date')->first();
+    }
+
     public function findForUser(User $user, int $id): Occasion
     {
         return Occasion::query()->where('household_id', $user->household_id)->findOrFail($id);
