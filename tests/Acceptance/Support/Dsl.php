@@ -1871,3 +1871,289 @@ function aVisitorOpensKlaus(): SeenFrontPage
 
     return SeenFrontPage::read((string) test()->get(route('home'))->assertOk()->getContent());
 }
+
+/**
+ * Read the logo and name at the top of the sign-up page, as someone who is not logged in.
+ */
+function theSignUpPage(): SeenBrand
+{
+    test()->assertGuest();
+
+    return SeenBrand::read((string) test()->get(route('register'))->assertOk()->getContent());
+}
+
+/**
+ * The colours Klaus's stylesheet gives each colour name, by day and at night.
+ * A colour that the stylesheet does not set (and is not plain white or black) keeps its name, e.g. "neutral-800".
+ */
+final class KlausColours
+{
+    /**
+     * @param  array<string, string>  $byDay
+     * @param  array<string, string>  $atNight
+     */
+    private function __construct(
+        private readonly array $byDay,
+        private readonly array $atNight,
+        public readonly string $stylesheet,
+    ) {}
+
+    public static function read(): self
+    {
+        $css = (string) file_get_contents(resource_path('css/app.css'));
+        $grab = function (string $pattern) use ($css): array {
+            preg_match($pattern, $css, $block);
+            preg_match_all('/--color-([\w-]+)\s*:\s*([^;]+);/', $block[1] ?? '', $pairs, PREG_SET_ORDER);
+
+            return array_column(array_map(fn (array $p): array => [$p[1], trim($p[2])], $pairs), 1, 0);
+        };
+
+        return new self($grab('/@theme\s*\{(.*?)\}/s'), $grab('/\.dark\s*\{(.*?)\}/s'), $css);
+    }
+
+    public function of(string $name, bool $atNight = false): string
+    {
+        $value = ($atNight ? ($this->atNight[$name] ?? null) : null) ?? $this->byDay[$name] ?? null;
+
+        if ($value === null) {
+            return match ($name) {
+                'white' => '#ffffff',
+                'black' => '#000000',
+                default => $name,
+            };
+        }
+
+        if (preg_match('/^var\(--color-([\w-]+)/', $value, $ref)) {
+            return $this->of($ref[1], $atNight);
+        }
+
+        return strtolower($value);
+    }
+
+    /** The colour of the thin lines around boxes and between rows, when nothing else is said. */
+    public function outlines(): string
+    {
+        preg_match('/border-color:\s*var\(--color-([\w-]+)/', $this->stylesheet, $match);
+
+        return $this->of($match[1] ?? 'unset');
+    }
+}
+
+/**
+ * How a page looks.
+ * backgroundByDay is the page's colour in light mode, backgroundsAtNight the colour(s) it fades through in dark mode.
+ * greys is every grey on the page as [where it is used, its colour].
+ * accent* is the colour of buttons and highlights, onAccent* the colour of writing on them. outlines is the default line colour.
+ */
+final class SeenLook
+{
+    /**
+     * @param  list<string>  $backgroundsAtNight
+     * @param  list<array{string, string}>  $greys
+     */
+    public function __construct(
+        public readonly string $backgroundByDay,
+        public readonly array $backgroundsAtNight,
+        public readonly array $greys,
+        public readonly string $accentByDay,
+        public readonly string $accentAtNight,
+        public readonly string $onAccentByDay,
+        public readonly string $onAccentAtNight,
+        public readonly string $outlines,
+    ) {}
+
+    public static function read(string $html): self
+    {
+        $colours = KlausColours::read();
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+        $xpath = new DOMXPath($dom);
+
+        $bodyClasses = preg_split('/\s+/', trim((string) $xpath->query('//body')->item(0)?->getAttribute('class'))) ?: [];
+        $byDay = 'none';
+        $atNight = [];
+        foreach ($bodyClasses as $class) {
+            if (preg_match('/^bg-(?!linear|radial|conic|gradient)([a-z]+(?:-\d+)?)(?:\/\d+)?$/', $class, $m)) {
+                $byDay = $colours->of($m[1]);
+            }
+            if (preg_match('/^dark:(?:bg-(?!linear|radial|conic|gradient)|from-|via-|to-)([a-z]+(?:-\d+)?)(?:\/\d+)?$/', $class, $m)) {
+                $atNight[] = $colours->of($m[1], true);
+            }
+        }
+
+        $greys = [];
+        foreach ($xpath->query('//*[@class]') as $element) {
+            foreach (preg_split('/\s+/', trim($element->getAttribute('class'))) ?: [] as $class) {
+                if (preg_match('/(?:^|:)(?:bg|text|border(?:-[trblxy])?|from|via|to|ring(?:-offset)?|divide|fill|stroke|outline|shadow|placeholder|decoration)-((?:zinc|stone|neutral|gray|slate)-\d{2,3})(?:\/\d+)?$/', $class, $m)) {
+                    $greys[$class] = [$class, $colours->of($m[1])];
+                }
+            }
+        }
+
+        return new self(
+            $byDay,
+            $atNight === [] ? [$byDay] : $atNight,
+            array_values($greys),
+            $colours->of('accent'),
+            $colours->of('accent', true),
+            $colours->of('accent-foreground'),
+            $colours->of('accent-foreground', true),
+            $colours->outlines(),
+        );
+    }
+}
+
+/**
+ * How a page I have open looks.
+ */
+function theLookOf(SeenBrand|SeenFrontPage $page): SeenLook
+{
+    return SeenLook::read($page->html);
+}
+
+/**
+ * The square tile the Klaus logo sits on, and the bow drawn on it, by day and at night.
+ */
+final class SeenLogoTile
+{
+    public function __construct(
+        public readonly string $tileByDay,
+        public readonly string $tileAtNight,
+        public readonly string $bowByDay,
+        public readonly string $bowAtNight,
+    ) {}
+}
+
+/**
+ * Read the logo tile at the top of a page I have open.
+ */
+function theLogoTileOn(SeenBrand|SeenFrontPage $page): SeenLogoTile
+{
+    $colours = KlausColours::read();
+    $dom = new DOMDocument;
+    @$dom->loadHTML('<?xml encoding="utf-8"?>'.$page->html);
+    $xpath = new DOMXPath($dom);
+
+    $bow = $xpath->query('//a[.//*[local-name()="svg"]]//*[local-name()="svg"]')->item(0);
+    expect($bow)->not->toBeNull('The page has no logo');
+
+    /** @return array{string, string} */
+    $colourOf = function (DOMElement $element, string $utility) use ($colours): array {
+        $day = $night = null;
+        foreach (preg_split('/\s+/', trim($element->getAttribute('class'))) ?: [] as $class) {
+            if (preg_match('/^'.$utility.'-((?!current\b)[a-z]+(?:-[a-z0-9]+)*)$/', $class, $m)) {
+                $day = $m[1];
+            }
+            if (preg_match('/^dark:'.$utility.'-([a-z]+(?:-[a-z0-9]+)*)$/', $class, $m)) {
+                $night = $m[1];
+            }
+        }
+
+        return [$day === null ? 'none' : $colours->of($day), $colours->of($night ?? $day ?? 'none', true)];
+    };
+
+    $tile = $bow->parentNode;
+    while ($tile instanceof DOMElement && $colourOf($tile, 'bg')[0] === 'none') {
+        $tile = $tile->parentNode;
+    }
+    expect($tile)->toBeInstanceOf(DOMElement::class, 'The logo does not sit on a tile');
+
+    // The bow is drawn in its own colour if it has one, otherwise in the colour of the writing around it.
+    $drawnBy = $bow;
+    while ($drawnBy instanceof DOMElement && $colourOf($drawnBy, 'text')[0] === 'none') {
+        $drawnBy = $drawnBy->parentNode;
+    }
+
+    [$tileByDay, $tileAtNight] = $colourOf($tile, 'bg');
+    [$bowByDay, $bowAtNight] = $drawnBy instanceof DOMElement ? $colourOf($drawnBy, 'text') : ['none', 'none'];
+
+    return new SeenLogoTile($tileByDay, $tileAtNight, $bowByDay, $bowAtNight);
+}
+
+/**
+ * The colours of the icons a browser tab and a phone home screen pick up for Klaus.
+ * tabIconBowByDay / tabIconBowOnADarkTabBar are the bow's colour in the browser tab icon.
+ * oldStyleTabIconBows is the bow's colour in each picture of the old-style tab icon (16, 32 and 48 pixels).
+ * homeScreenTile is the colour at the corners of the home screen icon, homeScreenBow the colour drawn on it.
+ */
+final class SeenAppIconColours
+{
+    /**
+     * @param  list<string>  $oldStyleTabIconBows
+     */
+    public function __construct(
+        public readonly string $tabIconBowByDay,
+        public readonly string $tabIconBowOnADarkTabBar,
+        public readonly array $oldStyleTabIconBows,
+        public readonly string $homeScreenTile,
+        public readonly bool $homeScreenTileIsSolid,
+        public readonly string $homeScreenBow,
+    ) {}
+}
+
+/**
+ * Read the colours of the browser tab icons and the phone home screen icon that Klaus ships.
+ */
+function theAppIconColours(): SeenAppIconColours
+{
+    $svg = (string) file_get_contents(public_path('favicon.svg'));
+    preg_match('/<svg[^>]*\sstroke="([^"]+)"/', $svg, $byDay);
+    preg_match('/prefers-color-scheme:\s*dark\)\s*\{[^}]*stroke:\s*([^;}\s]+)/', $svg, $atNight);
+
+    $hex = fn (int $r, int $g, int $b): string => sprintf('#%02x%02x%02x', $r, $g, $b);
+
+    // The bow in each old-style picture is its most used fully solid colour.
+    $bows = [];
+    $ico = new Imagick(public_path('favicon.ico'));
+    foreach ($ico as $picture) {
+        $counts = [];
+        foreach ($picture->getPixelIterator() as $row) {
+            foreach ($row as $pixel) {
+                $c = $pixel->getColor(2);
+                if ($c['a'] === 255) {
+                    $key = $hex($c['r'], $c['g'], $c['b']);
+                    $counts[$key] = ($counts[$key] ?? 0) + 1;
+                }
+            }
+        }
+        arsort($counts);
+        $bows[] = (string) (array_key_first($counts) ?? 'none');
+    }
+
+    $png = imagecreatefrompng(public_path('apple-touch-icon.png'));
+    expect($png)->not->toBeFalse('The home screen icon is not a picture');
+    imagepalettetotruecolor($png);
+    imagesavealpha($png, true);
+    $width = imagesx($png);
+    $height = imagesy($png);
+
+    $colourAt = function (int $x, int $y) use ($png, $hex): array {
+        $c = imagecolorsforindex($png, imagecolorat($png, $x, $y));
+
+        return [$hex($c['red'], $c['green'], $c['blue']), $c['alpha'] === 0];
+    };
+
+    $corners = [$colourAt(0, 0), $colourAt($width - 1, 0), $colourAt(0, $height - 1), $colourAt($width - 1, $height - 1)];
+    $tile = count(array_unique(array_column($corners, 0))) === 1 ? $corners[0][0] : 'mixed';
+
+    // The bow is the most used colour inside the tile that is not the tile itself.
+    $counts = [];
+    for ($y = 0; $y < $height; $y++) {
+        for ($x = 0; $x < $width; $x++) {
+            [$colour, $solid] = $colourAt($x, $y);
+            if ($solid && $colour !== $tile) {
+                $counts[$colour] = ($counts[$colour] ?? 0) + 1;
+            }
+        }
+    }
+    arsort($counts);
+
+    return new SeenAppIconColours(
+        strtolower($byDay[1] ?? 'none'),
+        strtolower($atNight[1] ?? 'none'),
+        $bows,
+        $tile,
+        ! in_array(false, array_column($corners, 1), true),
+        (string) (array_key_first($counts) ?? 'none'),
+    );
+}

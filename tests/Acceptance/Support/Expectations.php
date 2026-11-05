@@ -751,3 +751,93 @@ expect()->extend('toListComingUp', function (array $occasions) {
 
     return $this;
 });
+
+/** The Klaus wood palette's timber greys, from lightest to darkest, as the design system names them. */
+const WOOD_GREYS = [
+    50 => '#f3eee6', 100 => '#ede6db', 200 => '#e2d8ca', 300 => '#d0c3b1', 400 => '#a8977f', 500 => '#76664f',
+    600 => '#5a4b39', 700 => '#453726', 800 => '#2c1e10', 900 => '#1f150a', 950 => '#14100b',
+];
+const WOOD = '#54381b';
+const GOLD = '#f1c779';
+const SNOW = '#f8faf5';
+
+/** True when two colours are the same, give or take the soft edges a small picture is drawn with. */
+function looksLike(string $colour, string $wanted): bool
+{
+    if (! preg_match('/^#[0-9a-f]{6}$/', $colour)) {
+        return false;
+    }
+
+    foreach ([1, 3, 5] as $at) {
+        if (abs(hexdec(substr($colour, $at, 2)) - hexdec(substr($wanted, $at, 2))) > 8) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * The page is snow by day and dark wood (the three darkest timber greys) at night, every grey on it is a timber grey,
+ * lines default to the light timber grey, and buttons and highlights are wood with white writing by day and gold
+ * with dark wood writing at night.
+ */
+expect()->extend('toBeDressedInWood', function () {
+    expect($this->value)->toBeInstanceOf(SeenLook::class);
+    $look = $this->value;
+
+    expect($look->backgroundByDay)->toBe(SNOW, "The page is {$look->backgroundByDay} by day instead of snow");
+
+    foreach ($look->backgroundsAtNight as $colour) {
+        expect(in_array($colour, [WOOD_GREYS[800], WOOD_GREYS[900], WOOD_GREYS[950]], true))
+            ->toBeTrue("The page is {$colour} at night instead of dark wood");
+    }
+
+    $cold = array_values(array_filter($look->greys, fn (array $grey): bool => ! in_array($grey[1], WOOD_GREYS, true)));
+    expect($cold)->toBe([], 'The page uses greys that are not timber greys');
+
+    expect($look->outlines)->toBe(WOOD_GREYS[200], 'Lines are not the light timber grey')
+        ->and($look->accentByDay)->toBe(WOOD, 'Buttons are not wood by day')
+        ->and($look->onAccentByDay)->toBe('#ffffff', 'Writing on wood buttons is not white')
+        ->and($look->accentAtNight)->toBe(GOLD, 'Buttons are not gold at night')
+        ->and($look->onAccentAtNight)->toBe(WOOD_GREYS[800], 'Writing on gold buttons is not dark wood');
+
+    return $this;
+});
+
+/**
+ * The logo is a white bow on a wood tile by day and a dark wood bow on a gold tile at night.
+ */
+expect()->extend('toBeWhiteOnWoodByDayAndDarkWoodOnGoldAtNight', function () {
+    expect($this->value)->toBeInstanceOf(SeenLogoTile::class);
+
+    expect($this->value->tileByDay)->toBe(WOOD, 'The logo tile is not wood by day')
+        ->and($this->value->bowByDay)->toBe('#ffffff', 'The bow on the logo tile is not white by day')
+        ->and($this->value->tileAtNight)->toBe(GOLD, 'The logo tile is not gold at night')
+        ->and($this->value->bowAtNight)->toBe(WOOD_GREYS[800], 'The bow on the logo tile is not dark wood at night');
+
+    return $this;
+});
+
+/**
+ * The browser tab icon draws the bow in wood, and in gold on a dark tab bar; every picture in the old-style tab icon
+ * draws it in wood; the home screen icon is a solid wood tile (no see-through corners) with a white bow.
+ */
+expect()->extend('toBeInWood', function () {
+    expect($this->value)->toBeInstanceOf(SeenAppIconColours::class);
+    $icons = $this->value;
+
+    expect($icons->tabIconBowByDay)->toBe(WOOD, 'The browser tab bow is not wood')
+        ->and($icons->tabIconBowOnADarkTabBar)->toBe(GOLD, 'The browser tab bow is not gold on a dark tab bar')
+        ->and(count($icons->oldStyleTabIconBows))->toBe(3, 'The old-style tab icon does not hold three pictures');
+
+    foreach ($icons->oldStyleTabIconBows as $bow) {
+        expect(looksLike($bow, WOOD))->toBeTrue("The old-style tab icon draws the bow in {$bow} instead of wood");
+    }
+
+    expect(looksLike($icons->homeScreenTile, WOOD))->toBeTrue("The home screen icon's tile is {$icons->homeScreenTile} instead of wood")
+        ->and($icons->homeScreenTileIsSolid)->toBeTrue('The home screen icon has see-through corners, which phones fill with black')
+        ->and(looksLike($icons->homeScreenBow, '#ffffff'))->toBeTrue("The home screen bow is {$icons->homeScreenBow} instead of white");
+
+    return $this;
+});

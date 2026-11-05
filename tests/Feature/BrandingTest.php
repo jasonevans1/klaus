@@ -40,3 +40,32 @@ it('draws the bow as an outline, not filled', function () {
         expect($p)->toContain('fill="none"');
     }
 });
+
+function logoSvgClasses(string $html): string
+{
+    preg_match_all('/<svg[^>]*class="([^"]*)"/', $html, $m);
+
+    return implode(' ', array_filter($m[1], fn ($c) => str_contains($c, 'fill-current')));
+}
+
+it('draws the sidebar logo bow in the accent foreground colour', function () {
+    $html = $this->actingAs(User::factory()->create())->get(route('dashboard'))->getContent();
+
+    expect(logoSvgClasses($html))->toContain('text-accent-foreground');
+});
+
+it('draws the home page logo bow in the accent foreground colour', function () {
+    expect(logoSvgClasses($this->get(route('home'))->getContent()))->toContain('text-accent-foreground');
+});
+
+it('no longer hard-codes a white or black bow on the logo tile', function () {
+    $html = $this->actingAs(User::factory()->create())->get(route('dashboard'))->getContent();
+
+    expect(logoSvgClasses($html))->not->toContain('text-white')->not->toContain('dark:text-black');
+});
+
+it('keeps the logo tile on the accent colour', function () {
+    $this->actingAs(User::factory()->create())
+        ->get(route('dashboard'))
+        ->assertSee('bg-accent-content', false);
+});
