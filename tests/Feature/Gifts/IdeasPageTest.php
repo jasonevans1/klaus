@@ -6,6 +6,7 @@ use App\Models\Gift;
 use App\Models\Occasion;
 use App\Models\Recipient;
 use App\Models\User;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 
 function ideasPage(User $user)
@@ -139,4 +140,86 @@ it('links to the Ideas page from the sidebar', function () {
 
 it('requires login to see the Ideas page', function () {
     $this->get(route('ideas.index'))->assertRedirect(route('login'));
+});
+
+function ideasXpath(Testable $page): DOMXPath
+{
+    $dom = new DOMDocument;
+    @$dom->loadHTML('<?xml encoding="utf-8"?>'.$page->html());
+
+    return new DOMXPath($dom);
+}
+
+function ideaRowPath(string $title, string $inner = ''): string
+{
+    return '//*[@data-idea="'.$title.'"]'.$inner;
+}
+
+it('shows each group of people on the ideas page inside one bordered list', function () {
+    $user = User::factory()->create();
+    Recipient::factory()->forHousehold($user->household)->create(['name' => 'Abe']);
+
+    $xpath = ideasXpath(ideasPage($user));
+
+    expect($xpath->query('//*[@data-group]/*[contains(@class,"border") and contains(@class,"rounded-xl") and contains(@class,"divide-y")]/*[@*[name()="wire:key"]]/*[@data-person="Abe"]')->length)->toBe(1);
+});
+
+it('keeps the add idea button on the right of each person line', function () {
+    $user = User::factory()->create();
+    Recipient::factory()->forHousehold($user->household)->create(['name' => 'Abe']);
+
+    $xpath = ideasXpath(ideasPage($user));
+
+    expect($xpath->query('//*[@data-person="Abe"]/*[last()][contains(@class,"shrink-0")]//*[@data-test="add-idea-button"]')->length)->toBe(1);
+});
+
+it('keeps each idea\'s edit button and more-actions menu together on the right of the idea row', function () {
+    $user = User::factory()->create();
+    $person = Recipient::factory()->forHousehold($user->household)->create();
+    ideaFor($user, $person, ['title' => 'Scarf']);
+
+    $xpath = ideasXpath(ideasPage($user));
+    $actions = $xpath->query(ideaRowPath('Scarf', '/*[last()][contains(@class,"shrink-0")]'));
+
+    expect($actions->length)->toBe(1)
+        ->and($xpath->query('.//*[@data-test="edit-idea-button"]', $actions->item(0))->length)->toBe(1)
+        ->and($xpath->query('.//*[@data-flux-dropdown]//button[@aria-label="More actions"]', $actions->item(0))->length)->toBe(1)
+        ->and($xpath->query(ideaRowPath('Scarf', '//*[@data-flux-dropdown]//*[@data-test="edit-idea-button"]'))->length)->toBe(0);
+});
+
+it('puts delete inside the idea\'s more-actions menu with its confirmation', function () {
+    $user = User::factory()->create();
+    $person = Recipient::factory()->forHousehold($user->household)->create();
+    ideaFor($user, $person, ['title' => 'Scarf']);
+
+    $item = ideasXpath(ideasPage($user))->query(ideaRowPath('Scarf', '//*[@data-flux-dropdown]//*[@data-test="delete-idea-button"]'))->item(0);
+
+    expect($item)->not->toBeNull()
+        ->and($item->getAttribute('wire:confirm'))->toBe('Delete Scarf?');
+});
+
+it('deletes an idea from the more-actions menu', function () {
+    $user = User::factory()->create();
+    $person = Recipient::factory()->forHousehold($user->household)->create();
+    $idea = ideaFor($user, $person, ['title' => 'Scarf']);
+
+    $page = ideasPage($user);
+    $item = ideasXpath($page)->query(ideaRowPath('Scarf', '//*[@data-flux-dropdown]//*[@data-test="delete-idea-button"]'))->item(0);
+    preg_match('/^(\w+)\((.*)\)$/', $item->getAttribute('wire:click'), $call);
+    $page->call($call[1], (int) $call[2]);
+
+    expect(Gift::find($idea->id))->toBeNull();
+});
+
+it('lists each person\'s ideas only under that person when several people in a group have ideas', function () {
+    $user = User::factory()->create();
+    $mum = Recipient::factory()->forHousehold($user->household)->create(['name' => 'Mum']);
+    $pluto = Recipient::factory()->forHousehold($user->household)->create(['name' => 'Pluto']);
+    ideaFor($user, $mum, ['title' => 'Scarf']);
+    ideaFor($user, $pluto, ['title' => 'Dog bed']);
+
+    $xpath = ideasXpath(ideasPage($user));
+
+    expect($xpath->query('//*[@data-person="Mum"]/ancestor::*[@*[name()="wire:key"]][1]//*[@data-idea="Scarf"]')->length)->toBe(1)
+        ->and($xpath->query('//*[@data-person="Mum"]/ancestor::*[@*[name()="wire:key"]][1]//*[@data-idea="Dog bed"]')->length)->toBe(0);
 });

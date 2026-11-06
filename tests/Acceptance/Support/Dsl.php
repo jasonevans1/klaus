@@ -608,6 +608,75 @@ final class Member
         return SeenBrand::read($html);
     }
 
+    /**
+     * How the People page lays out its lines: one box per group, and what each person's line offers at hand and under More.
+     */
+    public function peoplePage(bool $includingArchived = false): SeenListPage
+    {
+        return SeenListPage::read($this->listPage('People', $includingArchived)->html(), ['//*[@data-person]'], '//*[@data-person]');
+    }
+
+    /**
+     * How the Ideas page lays out its lines: one box per group of people, each person with their ideas, and what each
+     * person's line and each idea offers at hand and under More.
+     */
+    public function ideasPage(): SeenListPage
+    {
+        return SeenListPage::read($this->listPage('Ideas')->html(), ['//*[@data-person]', '//*[@data-idea]'], '//*[@data-person]');
+    }
+
+    /**
+     * How the Occasions page lays out its lines: the box the occasions sit in, and what each occasion offers at hand and under More.
+     */
+    public function occasionsPage(): SeenListPage
+    {
+        return SeenListPage::read($this->listPage('Occasions')->html(), ['//*[@data-occasion]'], '//*[@data-occasion]');
+    }
+
+    /**
+     * Open the ⋯ More menu on the line for $for on the People, Ideas or Occasions page and pick $choice (e.g. "Archive").
+     * On the People page "Show archived" is on, so archived people can be restored.
+     */
+    public function picksFromMore(string $choice, string $for, string $on): void
+    {
+        $page = $this->listPage($on, true);
+
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$page->html());
+        $xpath = new DOMXPath($dom);
+
+        $line = $xpath->query('//*[@'.SeenListPage::NAMED_BY[$on].'="'.$for.'"]')->item(0);
+        expect($line)->not->toBeNull("The {$on} page has no line for {$for}");
+
+        $item = $xpath->query('.//*[@data-flux-menu]//*[@*[name()="wire:click"]][normalize-space(.)="'.$choice.'"]', $line)->item(0);
+        expect($item)->not->toBeNull("The line for {$for} on the {$on} page has no \"{$choice}\" under More");
+
+        expect(preg_match('/^(\w+)\((.*)\)$/', $item->getAttribute('wire:click'), $call))->toBe(1);
+        $params = json_decode('['.str_replace("'", '"', $call[2]).']', true);
+
+        Livewire::actingAs($this->user);
+        $page->call($call[1], ...$params)->assertHasNoErrors();
+
+        auth()->logout();
+    }
+
+    private function listPage(string $name, bool $includingArchived = false): Testable
+    {
+        $page = Livewire::actingAs($this->user)->test(match ($name) {
+            'People' => 'pages::people.index',
+            'Ideas' => 'pages::ideas.index',
+            'Occasions' => 'pages::occasions.index',
+        });
+
+        if ($name === 'People') {
+            $page->set('showArchived', $includingArchived);
+        }
+
+        auth()->logout();
+
+        return $page;
+    }
+
     public function personId(string $name): int
     {
         return Recipient::where('household_id', $this->user->household_id)->where('name', $name)->firstOrFail()->id;
@@ -2156,4 +2225,136 @@ function theAppIconColours(): SeenAppIconColours
         ! in_array(false, array_column($corners, 1), true),
         (string) (array_key_first($counts) ?? 'none'),
     );
+}
+
+/**
+ * A list page (People, Ideas, Occasions) as laid out for me: the boxes the lines sit in, and each line's choices.
+ */
+final class SeenListPage
+{
+    /** The attribute that names a line on each page. */
+    public const array NAMED_BY = ['People' => 'data-person', 'Ideas' => 'data-idea', 'Occasions' => 'data-occasion'];
+
+    /**
+     * @param  list<array{heading: string, lines: list<string>}>  $boxes  each bordered box with a divider between its lines, in the order shown
+     * @param  array<string, SeenListLine>  $lines
+     * @param  list<string>  $unboxed  lines that do not sit directly in a box
+     */
+    public function __construct(
+        public readonly array $boxes,
+        public readonly array $lines,
+        public readonly array $unboxed,
+    ) {}
+
+    /**
+     * @param  list<string>  $linesAt  every kind of line whose choices are read
+     * @param  string  $boxedAt  the lines that sit in the boxes; each one's keyed block is what sits in the box
+     */
+    public static function read(string $html, array $linesAt, string $boxedAt): self
+    {
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+        $xpath = new DOMXPath($dom);
+
+        $isBox = 'contains(concat(" ", normalize-space(@class), " "), " border ")'
+            .' and contains(concat(" ", normalize-space(@class), " "), " rounded-xl ")'
+            .' and contains(concat(" ", normalize-space(@class), " "), " divide-y ")';
+
+        $boxes = $unboxed = [];
+        $boxIndex = new SplObjectStorage;
+        foreach ($xpath->query('//*['.$isBox.']') as $box) {
+            $heading = trim((string) $xpath->evaluate('string(preceding::*[@data-flux-heading][1])', $box));
+            $boxIndex[$box] = count($boxes);
+            $boxes[] = ['heading' => trim((string) preg_replace('/\s*\(\d+\)$/', '', $heading)), 'lines' => []];
+        }
+
+        foreach ($xpath->query($boxedAt) as $element) {
+            $name = self::nameOf($element);
+            $block = $xpath->query('ancestor-or-self::*[@*[name()="wire:key"]][1]', $element)->item(0);
+            $parent = $block?->parentNode;
+
+            if ($parent instanceof DOMElement && isset($boxIndex[$parent])) {
+                $boxes[$boxIndex[$parent]]['lines'][] = $name;
+            } else {
+                $unboxed[] = $name;
+            }
+        }
+
+        $lines = [];
+        foreach ($linesAt as $query) {
+            foreach ($xpath->query($query) as $element) {
+                $lines[self::nameOf($element)] = SeenListLine::read($xpath, $element);
+            }
+        }
+
+        return new self($boxes, $lines, $unboxed);
+    }
+
+    private static function nameOf(DOMElement $element): string
+    {
+        foreach (self::NAMED_BY as $attribute) {
+            if ($element->hasAttribute($attribute)) {
+                return $element->getAttribute($attribute);
+            }
+        }
+
+        return '';
+    }
+
+    public function line(string $name): SeenListLine
+    {
+        expect(array_key_exists($name, $this->lines))->toBeTrue("The page has no line for {$name}");
+
+        return $this->lines[$name];
+    }
+}
+
+/**
+ * One line on a list page: what I can do with it at a glance, what sits under its ⋯ More menu (choice => the question
+ * I am asked first, or null), and whether all of its choices sit together at the end of the line.
+ */
+final class SeenListLine
+{
+    /**
+     * @param  list<string>  $atHand
+     * @param  array<string, ?string>  $underMore
+     */
+    public function __construct(
+        public readonly array $atHand,
+        public readonly array $underMore,
+        public readonly bool $hasMoreMenu,
+        public readonly bool $choicesSitTogetherAtTheEnd,
+    ) {}
+
+    public static function read(DOMXPath $xpath, DOMElement $line): self
+    {
+        $label = fn (DOMNode $node): string => trim((string) preg_replace('/\s+/', ' ', $node->textContent));
+        $hasClass = fn (DOMElement $element, string $class): bool => in_array($class, preg_split('/\s+/', $element->getAttribute('class')) ?: [], true);
+
+        $atHandElements = iterator_to_array($xpath->query('.//*[@*[name()="wire:click"]][not(ancestor::*[@data-flux-dropdown])]', $line));
+        $menus = iterator_to_array($xpath->query('.//*[@data-flux-dropdown]', $line));
+
+        $underMore = [];
+        foreach ($xpath->query('.//*[@data-flux-menu]//*[@*[name()="wire:click"]]', $line) as $item) {
+            $underMore[$label($item)] = $item->hasAttribute('wire:confirm') ? $item->getAttribute('wire:confirm') : null;
+        }
+
+        $children = iterator_to_array($xpath->query('./*', $line));
+        $end = end($children);
+        $together = $hasClass($line, 'justify-between')
+            && count($children) >= 2
+            && $end instanceof DOMElement
+            && $hasClass($end, 'shrink-0');
+
+        foreach ([...$atHandElements, ...$menus] as $choice) {
+            $together = $together && $end instanceof DOMElement && $end->contains($choice);
+        }
+
+        return new self(
+            array_map($label, $atHandElements),
+            $underMore,
+            $xpath->query('.//*[@data-flux-dropdown]//button[@aria-label="More actions"]', $line)->length === 1,
+            $together,
+        );
+    }
 }

@@ -143,3 +143,52 @@ it('shows no copy note and no error when I clear the year', function () {
 
     occasionsPage($user)->set('year', '')->assertOk()->assertDontSeeHtml('data-copies-from');
 });
+
+function occasionsXpath(User $user, string $name): DOMXPath
+{
+    $dom = new DOMDocument;
+    @$dom->loadHTML('<?xml encoding="utf-8"?>'.occasionsPage($user)->html());
+
+    return new DOMXPath($dom);
+}
+
+it('shows the occasions inside one bordered list', function () {
+    $user = User::factory()->create();
+    Occasion::factory()->forHousehold($user->household)->christmas(2026)->create();
+
+    $xpath = occasionsXpath($user, 'Christmas 2026');
+
+    expect($xpath->query('//section/*[contains(@class,"border") and contains(@class,"rounded-xl") and contains(@class,"divide-y")]/*[@data-occasion="Christmas 2026"]')->length)->toBe(1);
+});
+
+it("puts delete inside each occasion's more-actions menu on the right of the row", function () {
+    $user = User::factory()->create();
+    Occasion::factory()->forHousehold($user->household)->christmas(2026)->create();
+
+    $xpath = occasionsXpath($user, 'Christmas 2026');
+    $actions = $xpath->query('//*[@data-occasion="Christmas 2026"]/*[last()][contains(@class,"shrink-0")]');
+
+    expect($actions->length)->toBe(1)
+        ->and($xpath->query('.//*[@data-flux-dropdown]//button[@aria-label="More actions"]', $actions->item(0))->length)->toBe(1)
+        ->and($xpath->query('.//*[@data-flux-dropdown]//*[@data-test="delete-occasion-button"]', $actions->item(0))->length)->toBe(1);
+});
+
+it('keeps the delete confirmation that names the occasion and its gift count', function () {
+    $user = User::factory()->create();
+    $occasion = Occasion::factory()->forHousehold($user->household)->christmas(2026)->create();
+    $person = Recipient::factory()->forHousehold($user->household)->create();
+    Gift::factory()->count(2)->forPersonOn($person, $occasion)->create();
+
+    $xpath = occasionsXpath($user, 'Christmas 2026');
+    $item = $xpath->query('//*[@data-occasion="Christmas 2026"]//*[@data-test="delete-occasion-button"]')->item(0);
+
+    expect($item->getAttribute('wire:confirm'))->toBe('Delete Christmas 2026 and its 2 gifts?');
+});
+
+it('shows no bordered list when there are no occasions', function () {
+    $user = User::factory()->create();
+
+    $xpath = occasionsXpath($user, '');
+
+    expect($xpath->query('//*[contains(@class,"divide-y")]')->length)->toBe(0);
+});

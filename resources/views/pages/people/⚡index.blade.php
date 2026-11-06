@@ -95,14 +95,15 @@ new #[Title('People')] class extends Component {
         <div wire:key="group-{{ $label }}" data-group="{{ $label }}" class="space-y-2">
             <flux:heading>{{ $label }} ({{ $people->count() }})</flux:heading>
 
+            <div class="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 dark:divide-zinc-700 dark:border-zinc-700">
             @foreach ($people as $person)
                 <div wire:key="person-{{ $person->id }}" data-person="{{ $person->name }}"
                     @if ($person->is_shared) data-shared @endif
                     @if ($person->archived_at) data-archived @endif
                     @if ($person->birthdayLabel()) data-birthday="{{ $person->birthdayLabel() }}" @endif
                     @if ($person->age() !== null) data-age="{{ $person->age() }}" @endif
-                    class="flex items-center justify-between gap-4">
-                    <div>
+                    class="flex items-center justify-between gap-4 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                    <div class="min-w-0">
                         <div class="flex items-center gap-2">
                             <flux:text variant="strong"><a href="{{ route('people.show', $person) }}" wire:navigate>{{ $person->name }}</a></flux:text>
                             @if ($person->is_shared)
@@ -119,14 +120,22 @@ new #[Title('People')] class extends Component {
                             <flux:text size="sm" class="truncate">{{ \Illuminate\Support\Str::limit($person->interests, 80) }}</flux:text>
                         @endif
                     </div>
-                    <flux:button size="sm" wire:click="edit({{ $person->id }})" data-test="edit-person-button">{{ __('Edit') }}</flux:button>
-                    @if ($person->archived_at)
-                        <flux:button size="sm" wire:click="restore({{ $person->id }})" data-test="restore-person-button">{{ __('Restore') }}</flux:button>
-                    @else
-                        <flux:button size="sm" wire:click="archive({{ $person->id }})" data-test="archive-person-button">{{ __('Archive') }}</flux:button>
-                    @endif
+                    <div class="flex shrink-0 items-center gap-2">
+                        <flux:button size="sm" wire:click="edit({{ $person->id }})" data-test="edit-person-button">{{ __('Edit') }}</flux:button>
+                        <flux:dropdown position="bottom" align="end">
+                            <flux:button size="sm" variant="ghost" icon="ellipsis-horizontal" aria-label="{{ __('More actions') }}" data-test="person-menu-button" />
+                            <flux:menu>
+                                @if ($person->archived_at)
+                                    <flux:menu.item wire:click="restore({{ $person->id }})" data-test="restore-person-button">{{ __('Restore') }}</flux:menu.item>
+                                @else
+                                    <flux:menu.item wire:click="archive({{ $person->id }})" data-test="archive-person-button">{{ __('Archive') }}</flux:menu.item>
+                                @endif
+                            </flux:menu>
+                        </flux:dropdown>
+                    </div>
                 </div>
             @endforeach
+            </div>
         </div>
     @empty
         <div class="space-y-2">
