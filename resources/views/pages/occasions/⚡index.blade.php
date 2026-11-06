@@ -64,20 +64,31 @@ new #[Title('Occasions')] class extends Component
         </flux:modal.trigger>
     </div>
 
-    @forelse ($this->occasions as $occasion)
-        <div wire:key="occasion-{{ $occasion->id }}" data-occasion="{{ $occasion->name }}" class="flex items-center justify-between gap-4">
-            <div>
-                <flux:link :href="route('occasions.show', $occasion->id)" wire:navigate>{{ $occasion->name }}</flux:link>
-                <flux:text size="sm">{{ $occasion->date->format('M j, Y') }}</flux:text>
-            </div>
-            <flux:button size="sm" variant="danger" wire:click="delete({{ $occasion->id }})"
-                wire:confirm="{{ $occasion->gifts_count
-                    ? __('Delete :name and its :gifts?', ['name' => $occasion->name, 'gifts' => $occasion->gifts_count.' '.Str::plural('gift', $occasion->gifts_count)])
-                    : __('Delete :name?', ['name' => $occasion->name]) }}" data-test="delete-occasion-button">{{ __('Delete') }}</flux:button>
-        </div>
-    @empty
+    @if ($this->occasions->isEmpty())
         <flux:text>{{ __('No occasions yet.') }}</flux:text>
-    @endforelse
+    @else
+        <div class="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 dark:divide-zinc-700 dark:border-zinc-700">
+            @foreach ($this->occasions as $occasion)
+                <div wire:key="occasion-{{ $occasion->id }}" data-occasion="{{ $occasion->name }}" class="flex items-center justify-between gap-4 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                    <div class="min-w-0">
+                        <flux:link :href="route('occasions.show', $occasion->id)" wire:navigate>{{ $occasion->name }}</flux:link>
+                        <flux:text size="sm">{{ $occasion->date->format('M j, Y') }}</flux:text>
+                    </div>
+                    <div class="flex shrink-0 items-center gap-2">
+                        <flux:dropdown position="bottom" align="end">
+                            <flux:button size="sm" variant="ghost" icon="ellipsis-horizontal" aria-label="{{ __('More actions') }}" data-test="occasion-menu-button" />
+                            <flux:menu>
+                                <flux:menu.item variant="danger" icon="trash" wire:click="delete({{ $occasion->id }})"
+                                    wire:confirm="{{ $occasion->gifts_count
+                                        ? __('Delete :name and its :gifts?', ['name' => $occasion->name, 'gifts' => $occasion->gifts_count.' '.Str::plural('gift', $occasion->gifts_count)])
+                                        : __('Delete :name?', ['name' => $occasion->name]) }}" data-test="delete-occasion-button">{{ __('Delete') }}</flux:menu.item>
+                            </flux:menu>
+                        </flux:dropdown>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    @endif
 
     <flux:modal name="christmas" class="w-full max-w-sm">
         <form wire:submit="createChristmas" class="space-y-4">

@@ -841,3 +841,49 @@ expect()->extend('toBeInWood', function () {
 
     return $this;
 });
+
+/**
+ * Each group on the page is its own box with a divider between lines, listing exactly these lines in this order,
+ * e.g. ['Family' => ['Mum', 'Pluto'], 'Friends' => ['The Smiths']]; nothing is listed outside a box.
+ */
+expect()->extend('toListInBoxes', function (array $linesByGroup) {
+    expect($this->value)->toBeInstanceOf(SeenListPage::class);
+
+    $boxes = [];
+    foreach ($this->value->boxes as $box) {
+        expect($boxes)->not->toHaveKey($box['heading'], "{$box['heading']} is split over more than one box");
+        $boxes[$box['heading']] = $box['lines'];
+    }
+
+    expect($boxes)->toBe($linesByGroup)
+        ->and($this->value->unboxed)->toBe([], 'These lines sit outside a box: '.implode(', ', $this->value->unboxed));
+
+    return $this;
+});
+
+/**
+ * Every line on the page sits in one single box with a divider between lines, in exactly this order.
+ */
+expect()->extend('toListInOneBox', function (array $lines) {
+    expect($this->value)->toBeInstanceOf(SeenListPage::class)
+        ->and(array_map(fn (array $box) => $box['lines'], $this->value->boxes))->toBe([$lines])
+        ->and($this->value->unboxed)->toBe([], 'These lines sit outside the box: '.implode(', ', $this->value->unboxed));
+
+    return $this;
+});
+
+/**
+ * The line for $name offers exactly $atHand at a glance and exactly $underMore under its ⋯ More menu (choice => the question
+ * I am asked first, or null for none), all sitting together at the end of the line. An empty $underMore means no More menu.
+ */
+expect()->extend('toLineUp', function (string $name, array $atHand, array $underMore) {
+    expect($this->value)->toBeInstanceOf(SeenListPage::class);
+    $line = $this->value->line($name);
+
+    expect($line->atHand)->toBe($atHand, "What {$name}'s line offers at a glance")
+        ->and($line->hasMoreMenu)->toBe($underMore !== [], $underMore === [] ? "{$name}'s line should have no More menu" : "{$name}'s line has no ⋯ More menu")
+        ->and($line->underMore)->toBe($underMore, "What sits under More on {$name}'s line")
+        ->and($line->choicesSitTogetherAtTheEnd)->toBeTrue("{$name}'s choices do not sit together at the end of the line");
+
+    return $this;
+});
