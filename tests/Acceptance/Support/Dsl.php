@@ -634,7 +634,17 @@ final class Member
     }
 
     /**
-     * Open the ⋯ More menu on the line for $for on the People, Ideas or Occasions page and pick $choice (e.g. "Archive").
+     * How the occasion page lays out its lines: one box per group, each person's line with their gifts under it,
+     * and what each person's line and each gift offers at hand and under More.
+     */
+    public function occasionPage(string $occasion): SeenListPage
+    {
+        return SeenListPage::read($this->listPage($occasion)->html(), ['//*[@data-person]', '//*[@data-gift]'], '//*[@data-person]');
+    }
+
+    /**
+     * Open the ⋯ More menu on the line for $for on the People, Ideas or Occasions page, or on an occasion's page
+     * (e.g. "Christmas 2026", where $for is a person or a gift), and pick $choice (e.g. "Archive").
      * On the People page "Show archived" is on, so archived people can be restored.
      */
     public function picksFromMore(string $choice, string $for, string $on): void
@@ -645,7 +655,8 @@ final class Member
         @$dom->loadHTML('<?xml encoding="utf-8"?>'.$page->html());
         $xpath = new DOMXPath($dom);
 
-        $line = $xpath->query('//*[@'.SeenListPage::NAMED_BY[$on].'="'.$for.'"]')->item(0);
+        $namedBy = isset(SeenListPage::NAMED_BY[$on]) ? [SeenListPage::NAMED_BY[$on]] : ['data-person', 'data-gift'];
+        $line = $xpath->query('//*['.implode(' or ', array_map(fn (string $attribute) => '@'.$attribute.'="'.$for.'"', $namedBy)).']')->item(0);
         expect($line)->not->toBeNull("The {$on} page has no line for {$for}");
 
         $item = $xpath->query('.//*[@data-flux-menu]//*[@*[name()="wire:click"]][normalize-space(.)="'.$choice.'"]', $line)->item(0);
@@ -660,12 +671,16 @@ final class Member
         auth()->logout();
     }
 
+    /**
+     * The People, Ideas or Occasions page, or else the page of the occasion called $name.
+     */
     private function listPage(string $name, bool $includingArchived = false): Testable
     {
-        $page = Livewire::actingAs($this->user)->test(match ($name) {
-            'People' => 'pages::people.index',
-            'Ideas' => 'pages::ideas.index',
-            'Occasions' => 'pages::occasions.index',
+        $page = Livewire::actingAs($this->user)->test(...match ($name) {
+            'People' => ['pages::people.index'],
+            'Ideas' => ['pages::ideas.index'],
+            'Occasions' => ['pages::occasions.index'],
+            default => ['pages::occasions.show', ['occasion' => $this->occasionId($name)]],
         });
 
         if ($name === 'People') {
@@ -1021,6 +1036,12 @@ final class SeenOccasion
      * @param  string  $html  everything the page sends to my browser
      * @param  array<string, list<array{title: string, price: string, button: string|null}>>  $yearRoundIdeas  person name => the
      *                                                                                                         year-round ideas listed under them, with the text of each one's button
+     * @param  list<string>  $noGiftOnTheirLine  the names whose "No gift yet" badge sits on their own line, in the order shown
+     * @param  int  $noGiftMentions  how many times the page says "No gift yet"
+     * @param  array<string, string|null>  $budgetBoxes  person name => how the budget box on their line saves
+     *                                                   (its wire:model attribute, e.g. "wire:model.live.blur"), or null with no box on the line
+     * @param  array<string, array{toggle: string|null, hiddenOnLoad: bool}>  $yearRoundFolds  person name => the text of the toggle
+     *                                                                                         their year-round ideas fold behind (null with none), and whether every one of those ideas is folded away when the page loads
      */
     public function __construct(
         public readonly array $groups,
@@ -1037,6 +1058,10 @@ final class SeenOccasion
         public readonly string $myPrivateText = '',
         public readonly string $html = '',
         public readonly array $yearRoundIdeas = [],
+        public readonly array $noGiftOnTheirLine = [],
+        public readonly int $noGiftMentions = 0,
+        public readonly array $budgetBoxes = [],
+        public readonly array $yearRoundFolds = [],
     ) {}
 
     /**
@@ -1129,6 +1154,48 @@ final class SeenOccasion
 
         $myPrivate = $xpath->query('//*[@data-my-private-spent]')->item(0);
 
+        // "No gift yet" badges that sit on the line of the person they name.
+        $noGiftOnTheirLine = [];
+        foreach ($xpath->query('//*[@data-no-gift]') as $badge) {
+            $line = $xpath->query('ancestor::*[@data-person][1]', $badge)->item(0);
+            $text = trim((string) preg_replace('/\s+/', ' ', $badge->textContent));
+
+            if ($line instanceof DOMElement && $line->getAttribute('data-person') === $badge->getAttribute('data-no-gift') && $text === 'No gift yet') {
+                $noGiftOnTheirLine[] = $badge->getAttribute('data-no-gift');
+            }
+        }
+
+        // The budget box on each person's line, and how it saves what I type.
+        $budgetBoxes = [];
+        foreach ($xpath->query('//*[@data-person]') as $row) {
+            $box = $xpath->query('.//input[@*[starts-with(name(), "wire:model") and starts-with(., "budgets.")]]', $row)->item(0);
+            $model = null;
+            foreach ($box === null ? [] : $box->attributes as $attribute) {
+                if (str_starts_with($attribute->name, 'wire:model')) {
+                    $model = $attribute->name;
+                }
+            }
+            $budgetBoxes[$row->getAttribute('data-person')] = $model;
+        }
+
+        // Each person's year-round ideas: the toggle they fold behind, and whether they are folded away on load
+        // (inside a closed <details>, or an Alpine x-show block that is cloaked until Alpine starts).
+        $folds = [];
+        foreach ($xpath->query('//*[@data-person]') as $row) {
+            $block = $xpath->query('ancestor::*[@*[name()="wire:key"]][1]', $row)->item(0);
+            $toggle = $block === null ? null : $xpath->query('.//*[self::button or self::summary][starts-with(normalize-space(.), "Year-round ideas")]', $block)->item(0);
+            $hidden = true;
+
+            foreach ($block === null ? [] : $xpath->query('.//*[@data-year-round-idea]', $block) as $idea) {
+                $hidden = $hidden && $xpath->query('ancestor-or-self::*[(self::details and not(@open)) or (@x-show and @x-cloak)]', $idea)->length > 0;
+            }
+
+            $folds[$row->getAttribute('data-person')] = [
+                'toggle' => $toggle === null ? null : trim((string) preg_replace('/\s+/', ' ', $toggle->textContent)),
+                'hiddenOnLoad' => $hidden,
+            ];
+        }
+
         // Year-round ideas (with no occasion) listed under each person, waiting to be added to this occasion.
         $yearRound = [];
         foreach ($xpath->query('//*[@data-person]') as $row) {
@@ -1161,6 +1228,10 @@ final class SeenOccasion
             $myPrivate === null ? '' : trim((string) preg_replace('/\s+/', ' ', $myPrivate->textContent)),
             $html,
             $yearRound,
+            $noGiftOnTheirLine,
+            substr_count((string) preg_replace('/\s+/', ' ', $dom->textContent), 'No gift yet'),
+            $budgetBoxes,
+            $folds,
         );
     }
 }
@@ -2232,8 +2303,8 @@ function theAppIconColours(): SeenAppIconColours
  */
 final class SeenListPage
 {
-    /** The attribute that names a line on each page. */
-    public const array NAMED_BY = ['People' => 'data-person', 'Ideas' => 'data-idea', 'Occasions' => 'data-occasion'];
+    /** The attribute that names a line on each page. An occasion's page names its person lines like People and its gift lines by data-gift. */
+    public const array NAMED_BY = ['People' => 'data-person', 'Ideas' => 'data-idea', 'Occasions' => 'data-occasion', 'Gifts' => 'data-gift'];
 
     /**
      * @param  list<array{heading: string, lines: list<string>}>  $boxes  each bordered box with a divider between its lines, in the order shown

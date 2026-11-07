@@ -75,3 +75,7 @@ select:focus[data-flux-control] {
 [data-flux-button].bg-red-500:hover {
     background-color: var(--color-red-700);
 }
+
+[x-cloak] {
+    display: none !important;
+}
