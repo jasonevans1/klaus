@@ -887,3 +887,46 @@ expect()->extend('toLineUp', function (string $name, array $atHand, array $under
 
     return $this;
 });
+
+/**
+ * Exactly these people wear a "No gift yet" badge on their own line on the occasion page, in the order shown, and the page
+ * says "No gift yet" nowhere else: there is no separate list of them.
+ */
+expect()->extend('toBadgeNoGiftYetOn', function (array $names) {
+    expect($this->value)->toBeInstanceOf(SeenOccasion::class)
+        ->and($this->value->noGift)->toBe($names, 'Who is marked as having no gift yet')
+        ->and($this->value->noGiftOnTheirLine)->toBe($names, 'Whose "No gift yet" badge sits on their own line')
+        ->and($this->value->noGiftMentions)->toBe(count($names), 'The page should say "No gift yet" only on the badges');
+
+    return $this;
+});
+
+/**
+ * Each of these people has a budget box on their own line on the occasion page that saves as soon as I leave it.
+ */
+expect()->extend('toKeepABudgetBoxOnTheLineOf', function (string ...$names) {
+    expect($this->value)->toBeInstanceOf(SeenOccasion::class);
+
+    foreach ($names as $name) {
+        expect($this->value->budgetBoxes)->toHaveKey($name)
+            ->and($this->value->budgetBoxes[$name])->not->toBeNull("{$name}'s line has no budget box")
+            ->and($this->value->budgetBoxes[$name])->toBe('wire:model.live.blur', "{$name}'s budget box does not save when I leave it");
+    }
+
+    return $this;
+});
+
+/**
+ * Every person on the occasion page folds their year-round ideas away behind exactly this toggle, e.g.
+ * ['Mum' => null, 'Pluto' => 'Year-round ideas (2)'] (null: no ideas, no toggle), and the ideas stay folded away until I open them.
+ */
+expect()->extend('toFoldYearRoundIdeasBehind', function (array $toggles) {
+    expect($this->value)->toBeInstanceOf(SeenOccasion::class)
+        ->and(array_map(fn (array $fold) => $fold['toggle'], $this->value->yearRoundFolds))->toBe($toggles);
+
+    foreach ($this->value->yearRoundFolds as $person => $fold) {
+        expect($fold['hiddenOnLoad'])->toBeTrue("{$person}'s year-round ideas are open before I ask for them");
+    }
+
+    return $this;
+});

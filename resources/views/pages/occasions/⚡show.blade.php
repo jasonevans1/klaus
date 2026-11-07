@@ -242,12 +242,6 @@ new class extends Component
         <div>
             <flux:heading size="xl" level="1">{{ $this->occasion->name }}</flux:heading>
             <flux:text size="sm">{{ $this->occasion->date->format('M j, Y') }}</flux:text>
-            <flux:text data-total-budget="{{ Budget::format($this->totalBudgetCents) }}">{{ __('Total budget :amount', ['amount' => Budget::format($this->totalBudgetCents)]) }}</flux:text>
-            <flux:text data-total-spent="{{ Price::format($summary['spent']) }}">{{ __('Spent :amount', ['amount' => Price::format($summary['spent'])]) }}</flux:text>
-            <flux:text data-total-remaining="{{ Price::format($summary['remaining']) }}">{{ __('Remaining :amount', ['amount' => Price::format($summary['remaining'])]) }}</flux:text>
-            @if ($summary['privateSpent'] !== null)
-                <flux:text data-my-private-spent="{{ Price::format($summary['privateSpent']) }}">{{ __('My private gifts: :amount spent', ['amount' => Price::format($summary['privateSpent'])]) }}</flux:text>
-            @endif
         </div>
         <div class="flex items-center gap-2">
             <flux:button :href="route('occasions.shopping', $this->occasion)" wire:navigate data-test="shopping-list-link">{{ __('Shopping list') }}</flux:button>
@@ -256,20 +250,21 @@ new class extends Component
         </div>
     </div>
 
-    @if ($summary['noGift'] !== [])
-        <div class="space-y-2">
-            <flux:heading>{{ __('No gift yet') }}</flux:heading>
-            @foreach ($summary['noGift'] as $name)
-                <flux:text data-no-gift="{{ $name }}">{{ $name }}</flux:text>
-            @endforeach
-        </div>
-    @endif
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <flux:text class="rounded-xl border border-zinc-200 p-3 dark:border-zinc-700" data-total-budget="{{ Budget::format($this->totalBudgetCents) }}">{{ __('Total budget :amount', ['amount' => Budget::format($this->totalBudgetCents)]) }}</flux:text>
+        <flux:text class="rounded-xl border border-zinc-200 p-3 dark:border-zinc-700" data-total-spent="{{ Price::format($summary['spent']) }}">{{ __('Spent :amount', ['amount' => Price::format($summary['spent'])]) }}</flux:text>
+        <flux:text class="rounded-xl border border-zinc-200 p-3 dark:border-zinc-700" data-total-remaining="{{ Price::format($summary['remaining']) }}">{{ __('Remaining :amount', ['amount' => Price::format($summary['remaining'])]) }}</flux:text>
+        @if ($summary['privateSpent'] !== null)
+            <flux:text class="rounded-xl border border-zinc-200 p-3 dark:border-zinc-700" data-my-private-spent="{{ Price::format($summary['privateSpent']) }}">{{ __('My private gifts: :amount spent', ['amount' => Price::format($summary['privateSpent'])]) }}</flux:text>
+        @endif
+    </div>
 
     @forelse ($this->groups as $group => $people)
         @php($label = RecipientGroup::from($group)->label())
         <div wire:key="group-{{ $label }}" data-group="{{ $label }}" class="space-y-2">
             <flux:heading>{{ $label }} ({{ $people->count() }})</flux:heading>
 
+            <div class="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 dark:divide-zinc-700 dark:border-zinc-700">
             @foreach ($people as $person)
                 @php($row = $summary['people'][$person->id])
                 <div wire:key="person-{{ $person->id }}">
@@ -279,9 +274,12 @@ new class extends Component
                     data-budget="{{ Budget::format($person->pivot->budget_cents) }}"
                     data-spent="{{ Price::format($row['spent']) }}"
                     data-remaining="{{ $row['remaining'] === null ? '' : Price::format($row['remaining']) }}"
-                    class="flex items-center justify-between gap-4">
-                    <div class="flex items-center gap-2">
+                    class="flex items-center justify-between gap-4 px-4 py-3">
+                    <div class="flex min-w-0 items-center gap-2">
                         <flux:text variant="strong">{{ $person->name }}</flux:text>
+                        @if (in_array($person->name, $summary['noGift']))
+                            <flux:badge size="sm" color="amber" data-no-gift="{{ $person->name }}">{{ __('No gift yet') }}</flux:badge>
+                        @endif
                         @if ($person->is_shared)
                             <flux:badge size="sm">{{ __('Shared') }}</flux:badge>
                         @endif
@@ -289,7 +287,7 @@ new class extends Component
                             <flux:badge size="sm" color="zinc">{{ __('Archived') }}</flux:badge>
                         @endif
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex shrink-0 items-center gap-2">
                         <flux:text size="sm">{{ __('Spent :amount', ['amount' => Price::format($row['spent'])]) }}</flux:text>
                         @if ($row['remaining'] === null)
                         @elseif ($row['remaining'] < 0)
@@ -305,54 +303,79 @@ new class extends Component
                             </flux:input.group>
                             <flux:error name="budgets.{{ $person->id }}" />
                         </div>
-                        <flux:button size="sm" wire:click="remove({{ $person->id }})" wire:confirm="{{ $this->removeWarning($person->name, count($this->giftsByPerson[$person->id] ?? [])) }}" data-test="remove-person-button">{{ __('Remove') }}</flux:button>
+                        <flux:dropdown position="bottom" align="end">
+                            <flux:button size="sm" variant="ghost" icon="ellipsis-horizontal" aria-label="{{ __('More actions') }}" data-test="person-menu-button" />
+                            <flux:menu>
+                                <flux:menu.item wire:click="remove({{ $person->id }})" wire:confirm="{{ $this->removeWarning($person->name, count($this->giftsByPerson[$person->id] ?? [])) }}" data-test="remove-person-button">{{ __('Remove') }}</flux:menu.item>
+                            </flux:menu>
+                        </flux:dropdown>
                     </div>
                 </div>
 
-                <div class="space-y-1 pl-4 pt-2">
+                <div class="space-y-1 border-t border-zinc-200 bg-zinc-50 py-2 pl-8 pr-4 dark:border-zinc-700 dark:bg-zinc-800/50">
                     @foreach ($this->giftsByPerson[$person->id] ?? [] as $gift)
-                        <div wire:key="gift-{{ $gift->id }}" data-gift="{{ $gift->title }}" data-price="{{ Price::format($gift->price_cents) }}" data-store="{{ $gift->store }}" data-url="{{ $gift->url }}" data-status="{{ $gift->status->label() }}" data-buyer="{{ $gift->purchasedBy?->name }}" data-private="{{ $gift->is_private ? 'yes' : 'no' }}" class="flex items-center gap-4">
-                            @if ($gift->url)
-                                <a href="{{ $gift->url }}" target="_blank" rel="noopener noreferrer" class="underline">{{ $gift->title }}</a>
-                            @else
-                                <flux:text variant="strong">{{ $gift->title }}</flux:text>
-                            @endif
-                            <flux:text size="sm">{{ Price::format($gift->price_cents) }}</flux:text>
-                            @if ($gift->store)
-                                <flux:text size="sm">{{ $gift->store }}</flux:text>
-                            @endif
-                            <flux:badge size="sm">{{ $gift->status->label() }}</flux:badge>
-                            @if ($gift->is_private)
-                                <flux:badge size="sm" color="purple">{{ __('Private') }}</flux:badge>
-                            @endif
-                            @if ($gift->purchasedBy)
-                                <flux:text size="sm">{{ __('Bought by :name', ['name' => $gift->purchasedBy->name]) }}</flux:text>
-                            @endif
-                            @if ($next = $gift->status->next())
-                                <flux:button size="xs" wire:click="advanceGift({{ $gift->id }}, '{{ $gift->status->value }}')" data-test="advance-gift-button">{{ __('Mark :status', ['status' => strtolower($next->label())]) }}</flux:button>
-                            @endif
-                            <flux:button size="xs" wire:click="editGift({{ $gift->id }})" data-test="edit-gift-button">{{ __('Edit') }}</flux:button>
-                            <flux:button size="xs" wire:click="deleteGift({{ $gift->id }})" wire:confirm="{{ __('Delete :title?', ['title' => $gift->title]) }}" data-test="delete-gift-button">{{ __('Delete') }}</flux:button>
+                        @php($badgeColor = match ($gift->status) {
+                            GiftStatus::Idea => 'zinc',
+                            GiftStatus::Bought => 'blue',
+                            GiftStatus::Wrapped => 'amber',
+                            GiftStatus::Given => 'green',
+                        })
+                        <div wire:key="gift-{{ $gift->id }}" data-gift="{{ $gift->title }}" data-price="{{ Price::format($gift->price_cents) }}" data-store="{{ $gift->store }}" data-url="{{ $gift->url }}" data-status="{{ $gift->status->label() }}" data-buyer="{{ $gift->purchasedBy?->name }}" data-private="{{ $gift->is_private ? 'yes' : 'no' }}" class="flex items-center justify-between gap-4">
+                            <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                                @if ($gift->url)
+                                    <a href="{{ $gift->url }}" target="_blank" rel="noopener noreferrer" class="underline">{{ $gift->title }}</a>
+                                @else
+                                    <flux:text variant="strong">{{ $gift->title }}</flux:text>
+                                @endif
+                                <flux:text size="sm">{{ Price::format($gift->price_cents) }}</flux:text>
+                                @if ($gift->store)
+                                    <flux:text size="sm">{{ $gift->store }}</flux:text>
+                                @endif
+                                <flux:badge size="sm" :color="$badgeColor">{{ $gift->status->label() }}</flux:badge>
+                                @if ($gift->is_private)
+                                    <flux:badge size="sm" color="purple">{{ __('Private') }}</flux:badge>
+                                @endif
+                                @if ($gift->purchasedBy)
+                                    <flux:text size="sm">{{ __('Bought by :name', ['name' => $gift->purchasedBy->name]) }}</flux:text>
+                                @endif
+                            </div>
+                            <div class="flex shrink-0 items-center gap-2">
+                                @if ($next = $gift->status->next())
+                                    <flux:button size="xs" wire:click="advanceGift({{ $gift->id }}, '{{ $gift->status->value }}')" data-test="advance-gift-button">{{ __('Mark :status', ['status' => strtolower($next->label())]) }}</flux:button>
+                                @endif
+                                <flux:dropdown position="bottom" align="end">
+                                    <flux:button size="xs" variant="ghost" icon="ellipsis-horizontal" aria-label="{{ __('More actions') }}" />
+                                    <flux:menu>
+                                        <flux:menu.item wire:click="editGift({{ $gift->id }})" data-test="edit-gift-button">{{ __('Edit') }}</flux:menu.item>
+                                        <flux:menu.item wire:click="deleteGift({{ $gift->id }})" wire:confirm="{{ __('Delete :title?', ['title' => $gift->title]) }}" data-test="delete-gift-button">{{ __('Delete') }}</flux:menu.item>
+                                    </flux:menu>
+                                </flux:dropdown>
+                            </div>
                         </div>
                     @endforeach
                     <flux:button size="sm" wire:click="addGift({{ $person->id }})" data-test="add-gift-button">{{ __('Add gift') }}</flux:button>
 
                     @if ($ideas = $this->yearRoundIdeas[$person->id] ?? null)
-                        <flux:heading size="sm" class="pt-2">{{ __('Year-round ideas') }}</flux:heading>
-                        @foreach ($ideas as $idea)
-                            <div wire:key="year-round-idea-{{ $idea->id }}" data-year-round-idea="{{ $idea->title }}" data-price="{{ Price::format($idea->price_cents) }}" data-private="{{ $idea->is_private ? 'yes' : 'no' }}" class="flex items-center gap-4">
-                                <flux:text variant="strong">{{ $idea->title }}</flux:text>
-                                <flux:text size="sm">{{ Price::format($idea->price_cents) }}</flux:text>
-                                @if ($idea->is_private)
-                                    <flux:badge size="sm" color="purple">{{ __('Private') }}</flux:badge>
-                                @endif
-                                <flux:button size="xs" wire:click="assignIdea({{ $idea->id }})" data-test="assign-idea-button">{{ __('Add to this occasion') }}</flux:button>
+                        <div x-data="{ open: false }" class="space-y-1 pt-2">
+                            <button type="button" x-on:click="open = !open" class="text-sm font-medium">{{ __('Year-round ideas (:count)', ['count' => count($ideas)]) }}</button>
+                            <div x-show="open" x-cloak class="space-y-1">
+                                @foreach ($ideas as $idea)
+                                    <div wire:key="year-round-idea-{{ $idea->id }}" data-year-round-idea="{{ $idea->title }}" data-price="{{ Price::format($idea->price_cents) }}" data-private="{{ $idea->is_private ? 'yes' : 'no' }}" class="flex items-center gap-4">
+                                        <flux:text variant="strong">{{ $idea->title }}</flux:text>
+                                        <flux:text size="sm">{{ Price::format($idea->price_cents) }}</flux:text>
+                                        @if ($idea->is_private)
+                                            <flux:badge size="sm" color="purple">{{ __('Private') }}</flux:badge>
+                                        @endif
+                                        <flux:button size="xs" wire:click="assignIdea({{ $idea->id }})" data-test="assign-idea-button">{{ __('Add to this occasion') }}</flux:button>
+                                    </div>
+                                @endforeach
                             </div>
-                        @endforeach
+                        </div>
                     @endif
                 </div>
                 </div>
             @endforeach
+            </div>
         </div>
     @empty
         <div class="space-y-2">
