@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Enums\OccasionType;
 use App\Models\Occasion;
 use App\Models\User;
 use App\Repositories\GiftRepository;
@@ -23,6 +24,7 @@ class Reminders
         $today = $today->startOfDay();
         $occasions = $this->occasionRepository->upcoming($user, $today, 30);
         $limit = $today->addDays(30);
+        $yearly = [];
 
         $birthdays = [];
         $noGiftByOccasion = [];
@@ -31,14 +33,16 @@ class Reminders
             if ($date === null || $date > $limit) {
                 continue;
             }
-            $occasion = $occasions->first(fn (Occasion $occasion): bool => $occasion->birthday_recipient_id === $person->id && $occasion->date->toDateString() === $date->toDateString());
+            $occasion = $yearly[$date->year] ??= $this->occasionRepository->birthdaysFor($user, $date->year);
+            $onOccasion = $occasion?->recipients()->whereKey($person->id)->exists() ?? false;
+            $occasion = $onOccasion ? $occasion : null;
             $needsGift = $occasion !== null && in_array($person->name, $noGiftByOccasion[$occasion->id] ??= $this->noGiftNames($user, $occasion), true);
             $birthdays[] = ['name' => $person->name, 'date' => $date, 'days' => (int) $today->diffInDays($date), 'occasionId' => $occasion?->id, 'needsGift' => $needsGift];
         }
         usort($birthdays, fn (array $a, array $b): int => [$a['date'], $a['name']] <=> [$b['date'], $b['name']]);
 
         $noGift = [];
-        foreach ($occasions->whereNull('birthday_recipient_id') as $occasion) {
+        foreach ($occasions->whereNull('birthday_recipient_id')->where('type', '!=', OccasionType::Birthdays) as $occasion) {
             $people = $this->noGiftNames($user, $occasion);
             if ($people !== []) {
                 $noGift[] = ['occasionId' => $occasion->id, 'name' => $occasion->name, 'date' => $occasion->date->toImmutable(), 'days' => (int) $today->diffInDays($occasion->date), 'people' => $people];

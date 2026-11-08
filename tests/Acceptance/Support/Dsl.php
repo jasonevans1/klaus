@@ -7,7 +7,6 @@ use App\Models\Occasion;
 use App\Models\Recipient;
 use App\Models\User;
 use Illuminate\Notifications\AnonymousNotifiable;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Testing\Fakes\NotificationFake;
@@ -153,6 +152,29 @@ final class Member
 
         return new NewChristmasDialog(
             $year,
+            $note === null ? null : trim((string) preg_replace('/\s+/', ' ', $note->textContent)),
+            $refusal === '' ? null : $refusal,
+        );
+    }
+
+    /**
+     * Open "New birthdays" on the Occasions page, type $year and click Create: reports the note saying
+     * which Birthdays the budgets are copied from (null: no note) and any refusal shown under the year.
+     */
+    public function setsUpBirthdays(int $year): NewBirthdaysDialog
+    {
+        $page = Livewire::actingAs($this->user)->test('pages::occasions.index')->set('birthdaysYear', $year);
+
+        $dom = new DOMDocument;
+        @$dom->loadHTML('<?xml encoding="utf-8"?>'.$page->html());
+        $note = (new DOMXPath($dom))->query('//*[@data-birthdays-copies-from]')->item(0);
+
+        $page->call('createBirthdays');
+        $refusal = $page->errors()->first('birthdaysYear');
+
+        auth()->logout();
+
+        return new NewBirthdaysDialog(
             $note === null ? null : trim((string) preg_replace('/\s+/', ' ', $note->textContent)),
             $refusal === '' ? null : $refusal,
         );
@@ -996,18 +1018,6 @@ function itIs(string $date): void
 }
 
 /**
- * Klaus's daily job runs overnight, as the scheduler does once a day, creating the birthdays coming up.
- */
-function theDailyJobRuns(): void
-{
-    if (! array_key_exists('birthdays:create', Artisan::all())) {
-        throw new LogicException('Not implemented yet: the daily birthdays:create command (task 004)');
-    }
-
-    expect(Artisan::call('birthdays:create'))->toBe(0, 'The daily job failed');
-}
-
-/**
  * The outcome of trying to start a Christmas: refusal is the message I was shown, or null when it was created.
  */
 final class ChristmasAttempt
@@ -1761,6 +1771,17 @@ final class NewChristmasDialog
 {
     public function __construct(
         public readonly int $year,
+        public readonly ?string $copyNote,
+        public readonly ?string $refusal,
+    ) {}
+}
+
+/**
+ * What the "New birthdays" window said it copies (null: no note) and the refusal I was shown when I clicked Create (null: created).
+ */
+final class NewBirthdaysDialog
+{
+    public function __construct(
         public readonly ?string $copyNote,
         public readonly ?string $refusal,
     ) {}

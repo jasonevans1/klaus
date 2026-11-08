@@ -46,6 +46,25 @@ class OccasionRepository
             ->first();
     }
 
+    public function previousBirthdays(User $user, ?int $before = null): ?Occasion
+    {
+        return Occasion::query()
+            ->where('household_id', $user->household_id)
+            ->where('type', OccasionType::Birthdays)
+            ->when($before !== null, fn ($query) => $query->whereYear('date', '<', $before))
+            ->orderByDesc('date')
+            ->first();
+    }
+
+    public function birthdaysFor(User $user, int $year): ?Occasion
+    {
+        return Occasion::query()
+            ->where('household_id', $user->household_id)
+            ->where('type', OccasionType::Birthdays)
+            ->whereYear('date', $year)
+            ->first();
+    }
+
     public function currentChristmas(User $user, CarbonImmutable $today): ?Occasion
     {
         $christmases = fn () => Occasion::query()

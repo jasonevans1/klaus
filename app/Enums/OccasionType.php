@@ -8,6 +8,7 @@ enum OccasionType: string
 {
     case Christmas = 'christmas';
     case Birthday = 'birthday';
+    case Birthdays = 'birthdays';
 
     public function label(): string
     {

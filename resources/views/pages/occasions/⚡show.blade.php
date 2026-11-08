@@ -9,6 +9,7 @@ use App\Actions\Occasions\AddPeopleToOccasion;
 use App\Actions\Occasions\RemovePersonFromOccasion;
 use App\Actions\Occasions\SetBudget;
 use App\Enums\GiftStatus;
+use App\Enums\OccasionType;
 use App\Enums\RecipientGroup;
 use App\Livewire\Forms\GiftForm;
 use App\Models\Occasion;
@@ -238,6 +239,7 @@ new class extends Component
 
 <section class="w-full space-y-6 p-6">
     @php($summary = $this->summary())
+    @php($showBirthdays = $this->occasion->type === OccasionType::Birthdays)
     <div class="flex items-center justify-between gap-4">
         <div>
             <flux:heading size="xl" level="1">{{ $this->occasion->name }}</flux:heading>
@@ -271,12 +273,16 @@ new class extends Component
                 <div data-person="{{ $person->name }}"
                     @if ($person->is_shared) data-shared @endif
                     @if ($person->archived_at) data-archived @endif
+                    @if ($showBirthdays && $person->birthdayDayLabel()) data-birthday="{{ $person->birthdayDayLabel() }}" @endif
                     data-budget="{{ Budget::format($person->pivot->budget_cents) }}"
                     data-spent="{{ Price::format($row['spent']) }}"
                     data-remaining="{{ $row['remaining'] === null ? '' : Price::format($row['remaining']) }}"
                     class="flex items-center justify-between gap-4 px-4 py-3">
                     <div class="flex min-w-0 items-center gap-2">
                         <flux:text variant="strong">{{ $person->name }}</flux:text>
+                        @if ($showBirthdays && $person->birthdayDayLabel())
+                            <flux:text size="sm">{{ $person->birthdayDayLabel() }}</flux:text>
+                        @endif
                         @if (in_array($person->name, $summary['noGift']))
                             <flux:badge size="sm" color="amber" data-no-gift="{{ $person->name }}">{{ __('No gift yet') }}</flux:badge>
                         @endif

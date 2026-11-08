@@ -930,3 +930,44 @@ expect()->extend('toFoldYearRoundIdeasBehind', function (array $toggles) {
 
     return $this;
 });
+
+/**
+ * The "New birthdays" window had this note about what it copies (null: no note), and clicking Create made the Birthdays without complaint.
+ */
+expect()->extend('toHaveCreatedBirthdays', function (?string $copyNote) {
+    expect($this->value)->toBeInstanceOf(NewBirthdaysDialog::class)
+        ->and($this->value->copyNote)->toBe($copyNote)
+        ->and($this->value->refusal)->toBeNull();
+
+    return $this;
+});
+
+/**
+ * Clicking Create in the "New birthdays" window was refused with exactly this message.
+ */
+expect()->extend('toHaveRefusedBirthdays', function (string $message) {
+    expect($this->value)->toBeInstanceOf(NewBirthdaysDialog::class)
+        ->and($this->value->refusal)->toBe($message);
+
+    return $this;
+});
+
+/**
+ * Exactly these people show a birthday beside their name on the occasion page, person name => month and day as shown
+ * (e.g. "Mar 4"), in the order shown. People without a birthday shown are left out.
+ */
+expect()->extend('toShowBirthdays', function (array $byPerson) {
+    expect($this->value)->toBeInstanceOf(SeenOccasion::class);
+
+    $dom = new DOMDocument;
+    @$dom->loadHTML('<?xml encoding="utf-8"?>'.$this->value->html);
+
+    $shown = [];
+    foreach ((new DOMXPath($dom))->query('//*[@data-person][@data-birthday]') as $row) {
+        $shown[$row->getAttribute('data-person')] = $row->getAttribute('data-birthday');
+    }
+
+    expect($shown)->toBe($byPerson);
+
+    return $this;
+});

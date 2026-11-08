@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Occasions\CreateBirthdays;
 use App\Actions\Occasions\CreateChristmas;
 use App\Actions\Occasions\DeleteOccasion;
 use App\Models\Occasion;
@@ -8,6 +9,7 @@ use Flux\Flux;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -16,10 +18,15 @@ new #[Title('Occasions')] class extends Component
 {
     public int $year;
 
+    public int $birthdaysYear;
+
     public function mount(): void
     {
         $latest = app(OccasionRepository::class)->previousChristmas(Auth::user())?->date->year;
         $this->year = max(now()->year, ($latest ?? 0) + 1);
+
+        $latestBirthdays = app(OccasionRepository::class)->previousBirthdays(Auth::user())?->date->year;
+        $this->birthdaysYear = max(now()->year, ($latestBirthdays ?? 0) + 1);
     }
 
     public function createChristmas(CreateChristmas $createChristmas): void
@@ -27,6 +34,19 @@ new #[Title('Occasions')] class extends Component
         $this->validate(['year' => ['required', 'integer', 'min:2000', 'max:2100']]);
 
         $occasion = $createChristmas->handle(Auth::user(), $this->year);
+
+        $this->redirectRoute('occasions.show', $occasion->id, navigate: true);
+    }
+
+    public function createBirthdays(CreateBirthdays $createBirthdays): void
+    {
+        $this->validate(['birthdaysYear' => ['required', 'integer', 'min:2000', 'max:2100']]);
+
+        try {
+            $occasion = $createBirthdays->handle(Auth::user(), $this->birthdaysYear);
+        } catch (ValidationException $e) {
+            throw ValidationException::withMessages(['birthdaysYear' => $e->errors()['year']]);
+        }
 
         $this->redirectRoute('occasions.show', $occasion->id, navigate: true);
     }
@@ -46,6 +66,12 @@ new #[Title('Occasions')] class extends Component
         return isset($this->year) ? app(OccasionRepository::class)->previousChristmas(Auth::user(), $this->year) : null;
     }
 
+    #[Computed]
+    public function birthdaysCopiesFrom(): ?Occasion
+    {
+        return isset($this->birthdaysYear) ? app(OccasionRepository::class)->previousBirthdays(Auth::user(), $this->birthdaysYear) : null;
+    }
+
     /**
      * @return Collection<int, \App\Models\Occasion>
      */
@@ -59,9 +85,14 @@ new #[Title('Occasions')] class extends Component
 <section class="w-full space-y-6 p-6">
     <div class="flex items-center justify-between gap-4">
         <flux:heading size="xl" level="1">{{ __('Occasions') }}</flux:heading>
-        <flux:modal.trigger name="christmas">
-            <flux:button variant="primary" data-test="new-christmas-button">{{ __('New Christmas') }}</flux:button>
-        </flux:modal.trigger>
+        <div class="flex items-center gap-2">
+            <flux:modal.trigger name="birthdays">
+                <flux:button data-test="new-birthdays-button">{{ __('New birthdays') }}</flux:button>
+            </flux:modal.trigger>
+            <flux:modal.trigger name="christmas">
+                <flux:button variant="primary" data-test="new-christmas-button">{{ __('New Christmas') }}</flux:button>
+            </flux:modal.trigger>
+        </div>
     </div>
 
     @if ($this->occasions->isEmpty())
@@ -99,6 +130,19 @@ new #[Title('Occasions')] class extends Component
             @endif
             <div class="flex justify-end">
                 <flux:button type="submit" variant="primary" data-test="create-christmas-button">{{ __('Create') }}</flux:button>
+            </div>
+        </form>
+    </flux:modal>
+
+    <flux:modal name="birthdays" class="w-full max-w-sm">
+        <form wire:submit="createBirthdays" class="space-y-4">
+            <flux:heading size="lg">{{ __('New birthdays') }}</flux:heading>
+            <flux:input type="number" wire:model.live.blur="birthdaysYear" :label="__('Year')" />
+            @if ($this->birthdaysCopiesFrom)
+                <flux:text data-birthdays-copies-from="{{ $this->birthdaysCopiesFrom->name }}">{{ __('Copies budgets from :name.', ['name' => $this->birthdaysCopiesFrom->name]) }}</flux:text>
+            @endif
+            <div class="flex justify-end">
+                <flux:button type="submit" variant="primary" data-test="create-birthdays-button">{{ __('Create') }}</flux:button>
             </div>
         </form>
     </flux:modal>
