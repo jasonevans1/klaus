@@ -134,3 +134,52 @@ it('shows the budget error under the box', function () {
         ->assertHasErrors("budgets.{$mum->id}")
         ->assertSee(__('validation.min.numeric', ['attribute' => "budgets.{$mum->id}", 'min' => 0]));
 });
+
+function birthdayPerson(Occasion $occasion, string $name, array $birthday): Recipient
+{
+    $person = Recipient::factory()->forHousehold($occasion->household)->create(['name' => $name] + $birthday);
+    $occasion->recipients()->attach($person);
+
+    return $person;
+}
+
+it("shows each person's birthday beside them on a Birthdays occasion", function () {
+    $user = User::factory()->create();
+    $occasion = Occasion::factory()->forHousehold($user->household)->birthdays(2027)->create();
+    birthdayPerson($occasion, 'Mum', ['birthday_month' => 3, 'birthday_day' => 4, 'birthday_year' => null]);
+
+    occasionPage($user, $occasion)->assertSeeHtml('data-birthday="Mar 4"');
+});
+
+it('shows only the month and day, not the birth year', function () {
+    $user = User::factory()->create();
+    $occasion = Occasion::factory()->forHousehold($user->household)->birthdays(2027)->create();
+    birthdayPerson($occasion, 'Mum', ['birthday_month' => 3, 'birthday_day' => 4, 'birthday_year' => 1960]);
+
+    occasionPage($user, $occasion)->assertSeeHtml('data-birthday="Mar 4"')->assertDontSee('1960');
+});
+
+it('shows no birthday for a person added without one', function () {
+    $user = User::factory()->create();
+    $occasion = Occasion::factory()->forHousehold($user->household)->birthdays(2027)->create();
+    birthdayPerson($occasion, 'Mum', ['birthday_month' => null, 'birthday_day' => null, 'birthday_year' => null]);
+
+    occasionPage($user, $occasion)->assertDontSeeHtml('data-birthday');
+});
+
+it('does not show birthdays on a Christmas occasion', function () {
+    $user = User::factory()->create();
+    $occasion = occasionFor($user);
+    birthdayPerson($occasion, 'Mum', ['birthday_month' => 3, 'birthday_day' => 4, 'birthday_year' => null]);
+
+    occasionPage($user, $occasion)->assertDontSeeHtml('data-birthday');
+});
+
+it('does not show birthdays on an old per-person birthday occasion', function () {
+    $user = User::factory()->create();
+    $mum = Recipient::factory()->forHousehold($user->household)->create(['birthday_month' => 3, 'birthday_day' => 4]);
+    $occasion = Occasion::factory()->forHousehold($user->household)->create(['type' => 'birthday', 'birthday_recipient_id' => $mum->id]);
+    $occasion->recipients()->attach($mum);
+
+    occasionPage($user, $occasion)->assertDontSeeHtml('data-birthday');
+});

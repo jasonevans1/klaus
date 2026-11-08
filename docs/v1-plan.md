@@ -15,7 +15,7 @@ Goal: a usable v1 before Christmas 2026, built in small features one at a time. 
 | Users | One shared household: me and my partner, equal access to everything |
 | Login | Email + password |
 | Occasions | Christmas and birthdays only |
-| Birthdays | Birthday occasions are created automatically from each person's birthday |
+| Birthdays | One yearly Birthdays occasion, created from the Occasions page |
 | Budgets | Per person, per occasion |
 | Groups | Fixed: Family, Friends, Teachers, Coworkers |
 | Profiles | Name, group, birthday, interests, past gifts from earlier years |
@@ -94,8 +94,8 @@ Each feature is one HCF plan, small enough to build, test and deploy on its own.
   - Done when: an idea added in March shows up when planning Christmas.
 - [x] **12. Person page with history** — Profile with birthday and interests, ideas, and gifts from past occasions by year.
   - Done when: I can see what someone got last Christmas.
-- [x] **13. Automatic birthdays** — Scheduled command creates each person's birthday occasion ahead of time, carrying last year's budget.
-  - Done when: birthdays appear without me creating them.
+- [x] **13. Yearly birthdays** — One yearly Birthdays occasion created from the Occasions page, carrying last year's budget.
+  - Done when: I can set up the year's birthdays from the Occasions page.
 - [x] **14. Start a new Christmas** — Create next Christmas from last year's, copying people and budgets.
   - Done when: Christmas 2027 takes one click to set up.
 - [x] **15. Reminder banners** — In-app banners for upcoming birthdays and people with no gift yet.

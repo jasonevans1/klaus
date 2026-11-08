@@ -84,7 +84,7 @@ it('links reminders to their occasion', function () {
     $user = User::factory()->create();
     $house = $user->household;
     $mum = Recipient::factory()->forHousehold($house)->withBirthday(11, 5)->create(['name' => 'Mum']);
-    $birthday = Occasion::factory()->birthday($mum, '2026-11-05')->create();
+    $birthday = Occasion::factory()->forHousehold($house)->birthdays(2026)->create();
     $birthday->recipients()->attach($mum);
     $christmas = Occasion::factory()->forHousehold($house)->create(['date' => '2026-11-20']);
     $christmas->recipients()->attach($mum);

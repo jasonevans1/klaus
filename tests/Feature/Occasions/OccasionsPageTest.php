@@ -192,3 +192,53 @@ it('shows no bordered list when there are no occasions', function () {
 
     expect($xpath->query('//*[contains(@class,"divide-y")]')->length)->toBe(0);
 });
+
+it('shows a New birthdays button on the occasions page', function () {
+    occasionsPage(User::factory()->create())->assertSeeHtml('data-test="new-birthdays-button"');
+});
+
+it('defaults the birthdays year to this year when there are no Birthdays occasions', function () {
+    occasionsPage(User::factory()->create())->assertSet('birthdaysYear', now()->year);
+});
+
+it('defaults the birthdays year to the year after the latest Birthdays occasion', function () {
+    $user = User::factory()->create();
+    Occasion::factory()->forHousehold($user->household)->birthdays(now()->year + 2)->create();
+
+    occasionsPage($user)->assertSet('birthdaysYear', now()->year + 3);
+});
+
+it('creates the Birthdays occasion and opens its page', function () {
+    $user = User::factory()->create();
+
+    $page = occasionsPage($user)->set('birthdaysYear', 2030)->call('createBirthdays');
+
+    $occasion = Occasion::where('household_id', $user->household_id)->firstOrFail();
+    expect($occasion->name)->toBe('Birthdays 2030');
+    $page->assertRedirect(route('occasions.show', $occasion->id));
+});
+
+it('says which Birthdays occasion the budgets are copied from', function () {
+    $user = User::factory()->create();
+    Occasion::factory()->forHousehold($user->household)->birthdays(2026)->create();
+
+    occasionsPage($user)->set('birthdaysYear', 2027)
+        ->assertSeeHtml('data-birthdays-copies-from')->assertSee('Copies budgets from Birthdays 2026.')
+        ->assertDontSeeHtml('data-copies-from');
+});
+
+it("shows an error when that year's Birthdays already exists", function () {
+    $user = User::factory()->create();
+    Occasion::factory()->forHousehold($user->household)->birthdays(2030)->create();
+
+    occasionsPage($user)->set('birthdaysYear', 2030)->call('createBirthdays')
+        ->assertHasErrors(['birthdaysYear'])->assertSee('You already have Birthdays 2030.');
+});
+
+it('rejects a birthdays year outside 2000 to 2100', function () {
+    $user = User::factory()->create();
+
+    occasionsPage($user)->set('birthdaysYear', 1999)->call('createBirthdays')->assertHasErrors(['birthdaysYear'])
+        ->set('birthdaysYear', 2101)->call('createBirthdays')->assertHasErrors(['birthdaysYear']);
+    expect(Occasion::count())->toBe(0);
+});

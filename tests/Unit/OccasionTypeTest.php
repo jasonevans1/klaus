@@ -9,5 +9,6 @@ it('lists the occasion types with labels', function () {
         ->toBe([
             ['christmas', 'Christmas'],
             ['birthday', 'Birthday'],
+            ['birthdays', 'Birthdays'],
         ]);
 });

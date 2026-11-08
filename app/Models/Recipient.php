@@ -23,7 +23,6 @@ use Illuminate\Support\Carbon;
  * @property int|null $birthday_month
  * @property int|null $birthday_day
  * @property int|null $birthday_year
- * @property int|null $last_birthday_year
  * @property string|null $interests
  * @property Carbon|null $archived_at
  * @property Carbon|null $created_at
@@ -56,7 +55,6 @@ class Recipient extends Model
             'birthday_month' => 'integer',
             'birthday_day' => 'integer',
             'birthday_year' => 'integer',
-            'last_birthday_year' => 'integer',
             'archived_at' => 'datetime',
         ];
     }
@@ -85,13 +83,22 @@ class Recipient extends Model
         return $this->belongsToMany(Occasion::class)->withPivot('budget_cents')->withTimestamps();
     }
 
-    public function birthdayLabel(): ?string
+    public function birthdayDayLabel(): ?string
     {
         if ($this->birthday_month === null || $this->birthday_day === null) {
             return null;
         }
 
-        $label = Carbon::create(2000, $this->birthday_month, $this->birthday_day)->format('M j');
+        return Carbon::create(2000, $this->birthday_month, $this->birthday_day)->format('M j');
+    }
+
+    public function birthdayLabel(): ?string
+    {
+        $label = $this->birthdayDayLabel();
+
+        if ($label === null) {
+            return null;
+        }
 
         return $this->birthday_year === null ? $label : $label.', '.$this->birthday_year;
     }

@@ -42,6 +42,15 @@ class OccasionFactory extends Factory
         ]);
     }
 
+    public function birthdays(int $year): static
+    {
+        return $this->state([
+            'type' => OccasionType::Birthdays,
+            'name' => "Birthdays $year",
+            'date' => "$year-01-01",
+        ]);
+    }
+
     public function birthday(Recipient $person, string $date): static
     {
         return $this->state([

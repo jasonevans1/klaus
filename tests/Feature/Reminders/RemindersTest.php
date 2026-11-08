@@ -43,17 +43,82 @@ it('leaves out archived people and birthdays more than 30 days away', function (
     expect(array_column(reminders($user)['birthdays'], 'name'))->toBe(['Edge']);
 });
 
-it('links a birthday to its birthday occasion when there is one', function () {
+function birthdaysFor(User $user, int $year, Recipient ...$people): Occasion
+{
+    $occasion = Occasion::factory()->forHousehold($user->household)->birthdays($year)->create();
+    $occasion->recipients()->attach(array_map(fn (Recipient $person): int => $person->id, $people));
+
+    return $occasion;
+}
+
+it('links an upcoming birthday to that year\'s Birthdays occasion', function () {
     $user = User::factory()->create();
-    $house = $user->household;
-    $linked = Recipient::factory()->forHousehold($house)->withBirthday(11, 10)->create(['name' => 'Linked']);
-    Recipient::factory()->forHousehold($house)->withBirthday(11, 12)->create(['name' => 'Bare']);
-    $occasion = Occasion::factory()->birthday($linked, '2026-11-10')->create();
+    $ann = Recipient::factory()->forHousehold($user->household)->withBirthday(11, 10)->create();
+    $occasion = birthdaysFor($user, 2026, $ann);
 
-    $birthdays = reminders($user)['birthdays'];
+    expect(reminders($user)['birthdays'][0]['occasionId'])->toBe($occasion->id);
+});
 
-    expect($birthdays[0]['occasionId'])->toBe($occasion->id)
-        ->and($birthdays[1]['occasionId'])->toBeNull();
+it('says no gift yet when the person has no gift on the Birthdays occasion', function () {
+    $user = User::factory()->create();
+    $ann = Recipient::factory()->forHousehold($user->household)->withBirthday(11, 10)->create();
+    birthdaysFor($user, 2026, $ann);
+
+    expect(reminders($user)['birthdays'][0]['needsGift'])->toBeTrue();
+});
+
+it('stops saying no gift yet once the person has a gift there', function () {
+    $user = User::factory()->create();
+    $ann = Recipient::factory()->forHousehold($user->household)->withBirthday(11, 10)->create();
+    Gift::factory()->forPersonOn($ann, birthdaysFor($user, 2026, $ann))->create();
+
+    expect(reminders($user)['birthdays'][0]['needsGift'])->toBeFalse();
+});
+
+it('treats my partner\'s private gift as no gift for me', function () {
+    $user = User::factory()->create();
+    $partner = User::factory()->create(['household_id' => $user->household_id]);
+    $ann = Recipient::factory()->forHousehold($user->household)->withBirthday(11, 10)->create();
+    Gift::factory()->forPersonOn($ann, birthdaysFor($user, 2026, $ann))->private($partner)->create();
+
+    expect(reminders($user)['birthdays'][0]['needsGift'])->toBeTrue()
+        ->and(reminders($partner)['birthdays'][0]['needsGift'])->toBeFalse();
+});
+
+it('links a January birthday seen in December to next year\'s Birthdays occasion', function () {
+    $user = User::factory()->create();
+    $ann = Recipient::factory()->forHousehold($user->household)->withBirthday(1, 3)->create();
+    birthdaysFor($user, 2026, $ann);
+    $next = birthdaysFor($user, 2027, $ann);
+
+    $birthdays = app(Reminders::class)->for($user, CarbonImmutable::parse('2026-12-15'))['birthdays'];
+
+    expect($birthdays[0]['occasionId'])->toBe($next->id)
+        ->and($birthdays[0]['needsGift'])->toBeTrue();
+});
+
+it('shows the birthday without a link when that year has no Birthdays occasion', function () {
+    $user = User::factory()->create();
+    Recipient::factory()->forHousehold($user->household)->withBirthday(11, 10)->create();
+
+    expect(reminders($user)['birthdays'][0])->toMatchArray(['occasionId' => null, 'needsGift' => false]);
+});
+
+it('shows the birthday without a link when the person is not on that year\'s Birthdays occasion', function () {
+    $user = User::factory()->create();
+    Recipient::factory()->forHousehold($user->household)->withBirthday(11, 10)->create();
+    birthdaysFor($user, 2026);
+
+    expect(reminders($user)['birthdays'][0])->toMatchArray(['occasionId' => null, 'needsGift' => false]);
+});
+
+it('leaves Birthdays occasions out of the people-with-no-gift banner', function () {
+    $user = User::factory()->create();
+    $ann = Recipient::factory()->forHousehold($user->household)->withBirthday(11, 10)->create();
+    $occasion = birthdaysFor($user, 2026, $ann);
+    $occasion->update(['date' => '2026-11-10']);
+
+    expect(reminders($user)['noGift'])->toBe([]);
 });
 
 it('lists upcoming occasions with the people who have no gift yet', function () {
@@ -94,11 +159,8 @@ it('flags a birthday with no gift yet once, on the birthday, not again as an occ
     $ann = Recipient::factory()->forHousehold($house)->withBirthday(11, 10)->create(['name' => 'Ann']);
     $bob = Recipient::factory()->forHousehold($house)->withBirthday(11, 12)->create(['name' => 'Bob']);
     Recipient::factory()->forHousehold($house)->withBirthday(11, 14)->create(['name' => 'Cy']);
-    $annParty = Occasion::factory()->birthday($ann, '2026-11-10')->create();
-    $bobParty = Occasion::factory()->birthday($bob, '2026-11-12')->create();
-    $annParty->recipients()->attach($ann);
-    $bobParty->recipients()->attach($bob);
-    Gift::factory()->forPersonOn($bob, $bobParty)->create();
+    $birthdays = birthdaysFor($user, 2026, $ann, $bob);
+    Gift::factory()->forPersonOn($bob, $birthdays)->create();
 
     $result = reminders($user);
 

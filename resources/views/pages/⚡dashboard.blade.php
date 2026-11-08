@@ -133,9 +133,9 @@ new #[Title('Dashboard')] class extends Component
     <div class="flex flex-col gap-3">
         <flux:heading level="2">{{ __('Coming up') }}</flux:heading>
         @forelse ($this->upcoming as $row)
-            <div class="flex flex-wrap items-center gap-2" data-upcoming="{{ $row['occasion']->name }}" data-days="{{ $row['days'] }}" data-spent="{{ Price::format($row['spent']) }}" data-budget="{{ Price::format($row['budget']) }}">
-                <flux:link :href="route('occasions.show', $row['occasion'])" wire:navigate>{{ $row['occasion']->name }}</flux:link>
-                <flux:text>{{ $this->when($row['days'], $row['occasion']->date) }}</flux:text>
+            <div class="flex flex-wrap items-center gap-2" data-upcoming="{{ $row['name'] }}" data-days="{{ $row['days'] }}" data-spent="{{ Price::format($row['spent']) }}" data-budget="{{ Price::format($row['budget']) }}">
+                <flux:link :href="route('occasions.show', $row['occasionId'])" wire:navigate>{{ $row['name'] }}</flux:link>
+                <flux:text>{{ $this->when($row['days'], $row['date']) }}</flux:text>
                 <flux:text>{{ $this->money($row['spent'], $row['budget']) }}</flux:text>
                 @if ($row['budget'] > 0 && $row['remaining'] < 0)
                     <flux:badge size="sm" color="red">{{ __(':amount over', ['amount' => Price::format(-$row['remaining'])]) }}</flux:badge>
