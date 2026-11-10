@@ -77,3 +77,19 @@ The full suite (`ddev exec php artisan test --parallel`) includes the scenarios 
 ## Test Naming Convention
 - Test files: `{Subject}Test.php`
 - Tests: Pest `it('does something')` written in user terms, e.g. `it('hides a private gift from my partner')`
+
+## Browser smoke tests (Playwright)
+Chromium smoke tests in `tests/e2e/` (`@playwright/test`, JS). They run on the host, not in ddev, and CI runs them through the laravel-factory `e2e` job (fresh seeded SQLite, `php artisan serve` on `http://127.0.0.1:8000`).
+
+```bash
+npm run e2e                                   # against https://klaus.ddev.site
+BASE_URL=http://127.0.0.1:8000 npm run e2e    # against another server
+E2E_EMAIL=... E2E_PASSWORD=... npm run e2e    # different user (default: seeded test@example.com / password)
+npx playwright test --project=chromium -g "name"   # one test
+```
+
+- A `setup` project logs in once and saves `storageState` (Fortify throttles logins to 5/min per email+IP; don't log in per test).
+- Locators use `data-test` hooks (`page.getByTestId(...)`).
+- Write new specs by exploring the live app with `playwright-cli` to find locators; `@playwright/test` runs them.
+- Data rules: tests create their own uniquely named data and clean up what they create; never depend on or mutate pre-existing dev data. Don't use `test.skip`/`test.only` (factory test-integrity check).
+- Don't migrate or seed the ddev dev DB for these tests; the seeded user already exists there.
