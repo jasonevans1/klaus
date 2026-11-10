@@ -37,3 +37,8 @@ yarn-error.log
 /boost.json
 /opencode.json
 /opencode.jsonc
+/playwright-report
+/test-results
+/playwright/.cache
+/.playwright-cli
+/tests/e2e/.auth

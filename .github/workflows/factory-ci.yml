@@ -17,7 +17,7 @@ jobs:
     with:
       factory-ref: v1
       php-version: "8.5"
-      e2e: false
+      e2e: true
   lint:
     if: github.event_name == 'pull_request'
     uses: jasonevans1/laravel-factory/.github/workflows/lint.yml@v1
