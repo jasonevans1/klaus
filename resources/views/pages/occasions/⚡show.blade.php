@@ -237,15 +237,15 @@ new class extends Component
     }
 }; ?>
 
-<section class="w-full space-y-6 p-6">
+<section class="w-full space-y-6 p-4 sm:p-6">
     @php($summary = $this->summary())
     @php($showBirthdays = $this->occasion->type === OccasionType::Birthdays)
-    <div class="flex items-center justify-between gap-4">
+    <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
             <flux:heading size="xl" level="1">{{ $this->occasion->name }}</flux:heading>
             <flux:text size="sm">{{ $this->occasion->date->format('M j, Y') }}</flux:text>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
             <flux:button :href="route('occasions.shopping', $this->occasion)" wire:navigate data-test="shopping-list-link">{{ __('Shopping list') }}</flux:button>
             <flux:button :href="route('occasions.wrapping', $this->occasion)" wire:navigate data-test="wrapping-checklist-link">{{ __('Wrapping checklist') }}</flux:button>
             <flux:button variant="primary" wire:click="openAddPeople" data-test="add-people-button">{{ __('Add people') }}</flux:button>
@@ -277,8 +277,8 @@ new class extends Component
                     data-budget="{{ Budget::format($person->pivot->budget_cents) }}"
                     data-spent="{{ Price::format($row['spent']) }}"
                     data-remaining="{{ $row['remaining'] === null ? '' : Price::format($row['remaining']) }}"
-                    class="flex items-center justify-between gap-4 px-4 py-3">
-                    <div class="flex min-w-0 items-center gap-2">
+                    class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
+                    <div class="flex min-w-0 flex-wrap items-center gap-2">
                         <flux:text variant="strong">{{ $person->name }}</flux:text>
                         @if ($showBirthdays && $person->birthdayDayLabel())
                             <flux:text size="sm">{{ $person->birthdayDayLabel() }}</flux:text>
@@ -293,7 +293,8 @@ new class extends Component
                             <flux:badge size="sm" color="zinc">{{ __('Archived') }}</flux:badge>
                         @endif
                     </div>
-                    <div class="flex shrink-0 items-center gap-2">
+                    <div class="flex w-full shrink-0 flex-wrap items-center justify-between gap-2 sm:w-auto">
+                        <div class="flex items-center gap-2">
                         <flux:text size="sm">{{ __('Spent :amount', ['amount' => Price::format($row['spent'])]) }}</flux:text>
                         @if ($row['remaining'] === null)
                         @elseif ($row['remaining'] < 0)
@@ -301,11 +302,13 @@ new class extends Component
                         @else
                             <flux:text size="sm">{{ __(':amount left', ['amount' => Price::format($row['remaining'])]) }}</flux:text>
                         @endif
+                        </div>
+                        <div class="flex items-center gap-2">
                         <div>
                             <flux:input.group>
                                 <flux:input.group.prefix>$</flux:input.group.prefix>
                                 {{-- Livewire 4: .blur alone never reaches the server; .live.blur saves when the box loses focus --}}
-                                <flux:input wire:model.live.blur="budgets.{{ $person->id }}" inputmode="numeric" class="w-28" :aria-label="__('Budget for :name', ['name' => $person->name])" />
+                                <flux:input wire:model.live.blur="budgets.{{ $person->id }}" inputmode="numeric" class="w-20 sm:w-28" :aria-label="__('Budget for :name', ['name' => $person->name])" />
                             </flux:input.group>
                             <flux:error name="budgets.{{ $person->id }}" />
                         </div>
@@ -315,10 +318,11 @@ new class extends Component
                                 <flux:menu.item wire:click="remove({{ $person->id }})" wire:confirm="{{ $this->removeWarning($person->name, count($this->giftsByPerson[$person->id] ?? [])) }}" data-test="remove-person-button">{{ __('Remove') }}</flux:menu.item>
                             </flux:menu>
                         </flux:dropdown>
+                        </div>
                     </div>
                 </div>
 
-                <div class="space-y-1 border-t border-zinc-200 bg-zinc-50 py-2 pl-8 pr-4 dark:border-zinc-700 dark:bg-zinc-800/50">
+                <div class="space-y-1 border-t border-zinc-200 bg-zinc-50 py-2 pl-4 pr-4 sm:pl-8 dark:border-zinc-700 dark:bg-zinc-800/50">
                     @foreach ($this->giftsByPerson[$person->id] ?? [] as $gift)
                         @php($badgeColor = match ($gift->status) {
                             GiftStatus::Idea => 'zinc',
@@ -366,7 +370,7 @@ new class extends Component
                             <button type="button" x-on:click="open = !open" class="text-sm font-medium">{{ __('Year-round ideas (:count)', ['count' => count($ideas)]) }}</button>
                             <div x-show="open" x-cloak class="space-y-1">
                                 @foreach ($ideas as $idea)
-                                    <div wire:key="year-round-idea-{{ $idea->id }}" data-year-round-idea="{{ $idea->title }}" data-price="{{ Price::format($idea->price_cents) }}" data-private="{{ $idea->is_private ? 'yes' : 'no' }}" class="flex items-center gap-4">
+                                    <div wire:key="year-round-idea-{{ $idea->id }}" data-year-round-idea="{{ $idea->title }}" data-price="{{ Price::format($idea->price_cents) }}" data-private="{{ $idea->is_private ? 'yes' : 'no' }}" class="flex flex-wrap items-center gap-x-4 gap-y-1">
                                         <flux:text variant="strong">{{ $idea->title }}</flux:text>
                                         <flux:text size="sm">{{ Price::format($idea->price_cents) }}</flux:text>
                                         @if ($idea->is_private)
