@@ -14,11 +14,11 @@
         "laravel-vite-plugin": "^3.2",
         "tailwindcss": "^4.0.7",
         "vite": "npm:@voidzero-dev/vite-plus-core@1.6.0",
-        "vite-plus": "1.6.0"
+        "vite-plus": "1.7.0"
     },
     "optionalDependencies": {
         "@laravel/multiplex": "^0.4.1",
-        "@rollup/rollup-linux-x64-gnu": "4.68.3",
+        "@rollup/rollup-linux-x64-gnu": "4.68.7",
         "@tailwindcss/oxide-linux-x64-gnu": "^4.0.1",
         "lightningcss-linux-x64-gnu": "^1.29.1"
     },
