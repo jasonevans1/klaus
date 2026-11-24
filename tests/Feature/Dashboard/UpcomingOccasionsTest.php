@@ -160,3 +160,46 @@ it('skips archived people on the Birthdays occasion', function () {
 
     expect(upcomingFor($user))->toBe([]);
 });
+
+it('includes an occasion exactly 60 days away', function () {
+    $user = User::factory()->create();
+    $edge = upcomingOccasion($user, '2027-01-03');
+
+    expect(array_column(upcomingFor($user), 'occasionId'))->toBe([$edge->id]);
+});
+
+it('returns a list with sequential keys even when birthdays sort before occasions', function () {
+    $user = User::factory()->create();
+    upcomingOccasion($user, '2026-11-20');
+    birthdaysPerson($user, yearlyBirthdays($user, 2026), 'Pluto', 11, 6);
+
+    $rows = upcomingFor($user);
+
+    expect(array_is_list($rows))->toBeTrue()
+        ->and($rows[0]['name'])->toBe("Pluto's birthday");
+});
+
+it('still finds next years birthdays when this year has no Birthdays occasion', function () {
+    $user = User::factory()->create();
+    birthdaysPerson($user, yearlyBirthdays($user, 2027), 'Jan', 1, 5);
+
+    expect(array_column(upcomingFor($user, '2026-12-20'), 'name'))->toBe(["Jan's birthday"]);
+});
+
+it('includes a birthday exactly 60 days away but not 61', function () {
+    $user = User::factory()->create();
+    $occasion = yearlyBirthdays($user, 2027);
+    birthdaysPerson($user, $occasion, 'Edge', 1, 3);
+    birthdaysPerson($user, $occasion, 'Late', 1, 4);
+
+    expect(array_column(upcomingFor($user), 'name'))->toBe(["Edge's birthday"]);
+});
+
+it('uses a bare apostrophe for names ending in s and apostrophe-s otherwise', function () {
+    $user = User::factory()->create();
+    $occasion = yearlyBirthdays($user, 2026);
+    birthdaysPerson($user, $occasion, 'Chris', 11, 6);
+    birthdaysPerson($user, $occasion, 'Sam', 11, 7);
+
+    expect(array_column(upcomingFor($user), 'name'))->toBe(["Chris' birthday", "Sam's birthday"]);
+});
